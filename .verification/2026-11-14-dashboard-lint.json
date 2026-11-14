@@ -1,0 +1,58 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/dashboard_lint_verifier",
+  "security_reviewer": "/root/dashboard_lint_security",
+  "date": "2026-11-14",
+  "scope": "Behavior-preserving baseline lint repair only; not consent-only compliance or release clearance",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "dashboard/eslint.config.js": "646eeecabd8f96e735072e31545ed2ff98b70ef8",
+    "dashboard/src/Legal.jsx": "e09fbb21abcd268cacc4c09deff03d724af48a4b",
+    "dashboard/src/components/PricingPage.jsx": "fa181d2d555042e6ef6c649014602bb76fbe6c3e",
+    "dashboard/src/lib/consent.js": "fc01f887caf025348e01bbdd99438a283936e9de",
+    "dashboard/tests/lint-regression.test.mjs": "821a96dc74ce27239692118a414aa09c3decadfb"
+  },
+  "test_first": {
+    "baseline_lint": "10 errors, exit 1",
+    "new_regression_file_before_source_edits": "5 passed, 1 expected lint-boundary failure"
+  },
+  "independent_checks": [
+    "Six Node regression cases passed",
+    "npm run lint and npm run build exited 0",
+    "Vendor script syntax passed; bytes match base and original vendor commit",
+    "Base/candidate full Legal and Pricing SSR markup byte-identical",
+    "Broadened public-path lint exemption, skipped persistence and changed icon size mutations each detected; restored six cases passed"
+  ],
+  "builder_checks": {
+    "linux_pytest": {
+      "passed": 2069,
+      "skipped": 12,
+      "warnings": 2,
+      "note": "Reviewed dependency-PR CPU environment reused, not base-lock environment; external services and public-address DNS fixture faked, network disabled"
+    },
+    "browser": "Built Legal and Pricing pages rendered with API/geo fixtures and external requests blocked; no page errors"
+  },
+  "security": {
+    "delta": "PASS: no observed privacy/security regression",
+    "release_hold": "Pre-existing P1: analytics always on and not revocable, contrary to consent-only documentation",
+    "evidence": "Actual initializer and base/current modules exercised in simulated browser/storage; source behavior only, no production egress claim",
+    "mutations_caught": [
+      "Skipped persistence",
+      "Skipped notifications",
+      "Removed hostname guard",
+      "Removed once-only guard",
+      "Removed no-store",
+      "Broadened lint exemption"
+    ]
+  },
+  "not_checked": [
+    "Real browser consent restrictions or live analytics",
+    "Vendor teardown behavior",
+    "Legal exemption or compliance determination",
+    "Current upstream vendor-byte identity",
+    "Full Python suite against base-lock dependencies",
+    "GPU/NVENC and GeoIP fixture",
+    "Production deployment",
+    "Remote CI at this record"
+  ]
+}

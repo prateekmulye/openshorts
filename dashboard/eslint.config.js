@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Vendored minified OpenPanel bundle (96f0139; loader in index.html).
+  // ponytail: exact asset only — lint authored public scripts and any future source.
+  globalIgnores(['dist', 'public/op1.js']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
