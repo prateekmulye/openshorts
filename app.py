@@ -3318,7 +3318,7 @@ async def run_job(job_id, job_data):
 @app.get("/health")
 async def health():
     """Lightweight liveness probe for uptime monitoring."""
-    return {"status": "ok", "capabilities": {"source_ranges": True}}
+    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True}}
 
 
 @app.get("/health/ready")
@@ -6451,9 +6451,9 @@ async def social_post_status(request_id: str, request: Request):
     itself can still fail per platform, and the dashboard used to say "Posted
     successfully!" either way.
     """
-    owner = _post_request_owners.get(request_id)
-    if owner is None:
+    if request_id not in _post_request_owners:
         return {"status": "unknown"}
+    owner = _post_request_owners[request_id]
     if owner != await _owner_id(request):
         raise HTTPException(status_code=404, detail="Not found")
     upload_key, _ = await resolve_upload_post(request, None)
@@ -6464,15 +6464,35 @@ async def social_post_status(request_id: str, request: Request):
             resp = await client.get("https://api.upload-post.com/api/uploadposts/status",
                                     headers={"Authorization": f"Apikey {upload_key}"},
                                     params={"request_id": request_id})
+            resp.raise_for_status()
             data = resp.json()
         except Exception:
             return {"status": "unknown"}
-    results = [
-        {"platform": r.get("platform"), "success": r.get("success"),
-         "message": r.get("message") or r.get("error")}
-        for r in (data.get("results") or []) if isinstance(r, dict)
-    ] if isinstance(data, dict) else []
-    status = (data or {}).get("status") or "unknown"
+    statuses = ("pending", "queued", "processing", "in_progress", "completed", "failed", "not_found")
+    if (not isinstance(data, dict) or data.get("status") not in statuses
+            or not isinstance(data.get("results", []), list)
+            or any(not isinstance(r, dict) for r in data.get("results", []))):
+        return {"status": "unknown", "results": []}
+    status = data["status"]
+    results = []
+    for r in data.get("results", []):
+        platform = r.get("platform")
+        message = r.get("message") or r.get("error")
+        result = {"platform": platform if isinstance(platform, str) else None,
+                  "success": r.get("success") is True and isinstance(platform, str) and bool(platform.strip()),
+                  "message": message if isinstance(message, str) else None}
+        # Completion also includes skips and drafts; preserve the evidence, never coerce it.
+        for flag in ("skipped", "fallback_to_inbox"):
+            if flag in r:
+                result[flag] = r[flag] if type(r[flag]) is bool else None
+                if result[flag] is None:
+                    result["success"] = False
+        if "status" in r:
+            result["status"] = r["status"] if r["status"] in (
+                "queued", "processing", "completed", "failed", "retryable", "skipped") else "unknown"
+            if result["status"] == "unknown":
+                result["success"] = False
+        results.append(result)
     _log_post_failures(request_id, status, results)
     return {"status": status, "results": results}
 
