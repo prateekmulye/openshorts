@@ -1,0 +1,23 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_refreshed_ports",
+  "security_reviewer": "/root/security_upstream",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "app.py": "7762a050a341aa28386b65b19581792ef361253c",
+    "tests/test_agent_uploads.py": "c120efe45f273fa495771f27d417b17c32898e9f"
+  },
+  "evidence": {
+    "test_first": "21 failed before implementation",
+    "independent_full_suite": "1963 passed, 64 skipped, 6 warnings",
+    "focused": "37 passed including real local ASGI upload and FFmpeg/ffprobe",
+    "mutations": "Reset, finite duration and missing-file suppression removals caused 16, 2, 6 failures; restored 37 passed",
+    "security": "37 passed; reset, premature completion and broad OS-error suppression mutations caught"
+  },
+  "not_checked": [
+    "Concurrent same-ID PUT serialization",
+    "Live auth/providers",
+    "GPU/container runtime or deployment"
+  ]
+}
