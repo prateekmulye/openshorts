@@ -4,6 +4,7 @@ import asyncio
 import os
 import shutil
 import subprocess
+import threading
 
 import httpx
 import pytest
@@ -169,3 +170,185 @@ def test_auto_hook_false_opts_out(dirs, monkeypatch):
     monkeypatch.setattr(app_module.job_queue, "put", fake_put)
     payload = _tool_payload(_mcp("process_video", {"upload_id": slot["upload_id"], "confirm_rights": True, "auto_hook": False}))
     assert "AUTO_HOOK" not in app_module.jobs[payload["job_id"]]["env"]
+
+
+@pytest.fixture(params=[
+    (b"x" * (1024 * 1024 + 1), 413, "File too large. Max size 1MB"),
+    (b"", 400, "Empty body"),
+    (b"not-a-video", 400, "The body is not a readable video file"),
+], ids=["oversized", "empty", "unreadable"])
+def rejected_upload(dirs, monkeypatch, request):
+    """Real upload files with the external media probe returning unreadable."""
+    monkeypatch.setattr(app_module, "MAX_FILE_SIZE_MB", 1)
+    monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 0.0)
+    slot = _tool_payload(_mcp("create_upload", {}))
+    return slot["upload_id"], request.param
+
+
+def _put_upload(upload_id, body):
+    async def put():
+        async with _client() as client:
+            return await client.put(f"/api/uploads/{upload_id}", content=body)
+    return asyncio.run(put())
+
+
+def test_failed_replacement_upload_invalidates_prior_success(rejected_upload, monkeypatch):
+    upload_id, (body, status, detail) = rejected_upload
+    monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 120.0)
+    assert _put_upload(upload_id, b"previous-video").status_code == 200
+    monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 0.0)
+    response = _put_upload(upload_id, body)
+    assert response.status_code == status
+    assert response.json() == {"detail": detail}
+    slot = app_module.pending_uploads[upload_id]
+    assert slot["complete"] is False and slot["bytes"] == 0
+    assert not os.path.exists(slot["path"])
+
+
+@pytest.mark.parametrize("previously_complete", [False, True])
+def test_failed_upload_cleanup_tolerates_disappearance(rejected_upload, monkeypatch,
+                                                       previously_complete):
+    upload_id, (body, status, detail) = rejected_upload
+    slot = app_module.pending_uploads[upload_id]
+    if previously_complete:
+        monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 120.0)
+        assert _put_upload(upload_id, b"previous-video").status_code == 200
+        monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 0.0)
+    remove = os.remove
+    calls = []
+
+    def remove_after_disappearance(path):
+        # Deterministic race at the OS boundary: another actor removes the
+        # real temporary file just before this cleanup tries to remove it.
+        assert path == slot["path"]
+        calls.append(path)
+        remove(path)
+        remove(path)
+
+    monkeypatch.setattr(app_module.os, "remove", remove_after_disappearance)
+    response = _put_upload(upload_id, body)
+    assert response.status_code == status
+    assert response.json() == {"detail": detail}
+    assert calls == [slot["path"]]
+    assert slot["complete"] is False
+    assert slot["bytes"] == 0
+    assert not os.path.exists(slot["path"])
+
+
+@pytest.mark.parametrize("error", [PermissionError("denied"), OSError("disk error")],
+                         ids=["permission", "other-os-error"])
+@pytest.mark.parametrize("previously_complete", [False, True])
+def test_failed_upload_cleanup_preserves_other_os_errors(rejected_upload, monkeypatch, error,
+                                                        previously_complete):
+    upload_id, (body, _, _) = rejected_upload
+    slot = app_module.pending_uploads[upload_id]
+    if previously_complete:
+        monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 120.0)
+        assert _put_upload(upload_id, b"previous-video").status_code == 200
+        monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 0.0)
+
+    def remove(path):
+        assert path == slot["path"]
+        raise error
+
+    monkeypatch.setattr(app_module.os, "remove", remove)
+    with pytest.raises(type(error), match=str(error)):
+        _put_upload(upload_id, body)
+    assert os.path.exists(slot["path"])
+    assert slot["complete"] is False
+    assert slot["bytes"] == 0
+
+
+def test_upload_cannot_be_consumed_while_probe_is_pending(dirs, monkeypatch):
+    upload_id = _tool_payload(_mcp("create_upload", {}))["upload_id"]
+    slot = app_module.pending_uploads[upload_id]
+    assert _put_upload(upload_id, b"previous-video").status_code == 200
+    started, release = threading.Event(), threading.Event()
+
+    def probe(path):
+        started.set()
+        assert release.wait(5), "test did not release the media probe"
+        return 120.0
+
+    monkeypatch.setattr(app_module, "_media_duration_seconds", probe)
+
+    async def run():
+        async with _client() as client:
+            put = asyncio.create_task(client.put(f"/api/uploads/{upload_id}", content=b"replacement"))
+            try:
+                assert await asyncio.to_thread(started.wait, 5), "media probe did not start"
+                with pytest.raises(app_module.HTTPException) as exc:
+                    app_module._take_pending_upload(upload_id, None)
+                assert exc.value.status_code == 409
+                assert slot["complete"] is False and slot["bytes"] == 0
+            finally:
+                release.set()
+                response = await put
+            assert response.status_code == 200
+            assert response.json()["bytes"] == 11
+
+    asyncio.run(run())
+    assert slot["complete"] is True and slot["bytes"] == 11
+
+
+@pytest.mark.parametrize("duration", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_upload_duration_is_unreadable(dirs, monkeypatch, duration):
+    upload_id = _tool_payload(_mcp("create_upload", {}))["upload_id"]
+    assert _put_upload(upload_id, b"previous-video").status_code == 200
+    monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: duration)
+    response = _put_upload(upload_id, b"replacement")
+    assert response.status_code == 400
+    assert response.json() == {"detail": "The body is not a readable video file"}
+    slot = app_module.pending_uploads[upload_id]
+    assert slot["complete"] is False and slot["bytes"] == 0
+    assert not os.path.exists(slot["path"])
+
+
+def test_completed_upload_cannot_be_taken_or_deleted_by_another_owner(dirs, monkeypatch):
+    slot = _tool_payload(_mcp("create_upload", {}))
+    upload_id = slot["upload_id"]
+    response = _put_upload(upload_id, b"fixture-media")
+    assert response.status_code == 200
+    stored = app_module.pending_uploads[upload_id]
+    assert stored["complete"] is True and stored["bytes"] == 13
+    stored["user_id"] = "fixture-owner"
+    monkeypatch.setattr(app_module, "BILLING_ENABLED", True)
+    assert app_module._take_pending_upload(upload_id, "fixture-owner") is stored
+    with pytest.raises(app_module.HTTPException) as exc:
+        app_module._take_pending_upload(upload_id, "different-owner")
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Unknown or expired upload_id"
+
+    async def other_owner(request):
+        return "different-owner"
+
+    monkeypatch.setattr(app_module, "_owner_id", other_owner)
+    # Direct endpoint invocation avoids unrelated cloud authentication middleware;
+    # this checks the existing ownership guard, not live authentication.
+    with pytest.raises(app_module.HTTPException) as exc:
+        asyncio.run(app_module.delete_upload(upload_id, None))
+    assert exc.value.status_code == 404
+    assert app_module.pending_uploads[upload_id] is stored
+    assert os.path.exists(stored["path"])
+
+
+def test_real_video_upload_completes_after_media_probe(tmp_path, monkeypatch):
+    """Real local FFmpeg input, ASGI upload and ffprobe; no pipeline/provider."""
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg and ffprobe required for the real upload seam")
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    monkeypatch.setattr(app_module, "UPLOAD_DIR", str(uploads))
+    source = tmp_path / "source.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+                    "color=c=blue:s=32x48:r=5:d=1", "-c:v", "mpeg4", str(source)],
+                   check=True, capture_output=True)
+    upload_id = _tool_payload(_mcp("create_upload", {}))["upload_id"]
+    response = _put_upload(upload_id, source.read_bytes())
+    assert response.status_code == 200
+    assert response.json()["duration_seconds"] == 1.0
+    assert response.json()["bytes"] == source.stat().st_size
+    slot = app_module.pending_uploads[upload_id]
+    assert slot["complete"] is True and slot["bytes"] == source.stat().st_size
+    with open(slot["path"], "rb") as uploaded:
+        assert uploaded.read() == source.read_bytes()
