@@ -448,12 +448,21 @@ def plan_source_range(probed_minutes, source_range):
     if not source_range:
         return None
     start_raw, end_raw = source_range
-    duration = max(0.0, float(probed_minutes) * 60.0)
+    try:
+        duration = float(probed_minutes) * 60.0
+    except (TypeError, ValueError, OverflowError):
+        raise HTTPException(status_code=400, detail="Could not determine the video duration. Try a different source.")
+    if isinstance(probed_minutes, bool) or not math.isfinite(duration) or duration <= 0:
+        raise HTTPException(status_code=400, detail="Could not determine the video duration. Try a different source.")
+    if isinstance(start_raw, bool) or isinstance(end_raw, bool):
+        raise HTTPException(status_code=400, detail="source_start / source_end must be seconds.")
     try:
         start = float(start_raw) if start_raw not in (None, "") else 0.0
         end = float(end_raw) if end_raw not in (None, "") else duration
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise HTTPException(status_code=400, detail="source_start / source_end must be seconds.")
+    if not math.isfinite(start) or not math.isfinite(end):
+        raise HTTPException(status_code=400, detail="source_start / source_end must be finite seconds.")
     start = max(0.0, start)
     end = min(duration, end) if duration else end
     if start <= 1.0 and (not duration or end >= duration - 1.0):
@@ -568,7 +577,8 @@ async def reserve_process_minutes(request, url, input_path, job_id, max_minutes=
     clips only that stretch: it is billed alone and comes back as a partial
     with ``start_seconds`` and ``chosen``.
 
-    BYOK / self-host requests don't consume minutes (priority 2, no reservation).
+    BYOK / self-host requests don't consume minutes (priority 2, no reservation),
+    but an explicit source range is still validated and returned as a cut.
     For a managed (entitled, no BYOK header) request this probes the input
     duration, enforces the per-user concurrent-job limit, and reserves minutes —
     raising 402 (quota) or 429 (too many jobs) as needed.
@@ -579,7 +589,26 @@ async def reserve_process_minutes(request, url, input_path, job_id, max_minutes=
     on the operator's key for free. Only skip metering when billing is off.
     """
     if not BILLING_ENABLED:
-        return None, 2, None, None, None
+        partial = None
+        if source_range:
+            # shortcut: reuse existing probes; share quality-gate results if repeat lookups matter.
+            try:
+                if url:
+                    probe = await _probe_youtube_quality(url)
+                    seconds = probe.get("duration")
+                else:
+                    seconds = await asyncio.get_event_loop().run_in_executor(
+                        None, _media_duration_seconds, input_path)
+                if isinstance(seconds, bool):
+                    raise ValueError("Boolean duration")
+                minutes = float(seconds) / 60.0
+            except Exception:
+                raise HTTPException(status_code=400, detail="Could not determine the video duration. Try a different source.")
+            chosen = plan_source_range(minutes, source_range)
+            if chosen is not None:
+                partial = {"processed_minutes": (chosen["end_seconds"] - chosen["start_seconds"]) / 60.0,
+                           "total_minutes": minutes, **chosen, "chosen": True}
+        return None, 2, None, None, partial
     user = await _user_from_request(request)
     if not managed_keys.has_active_entitlement(user):
         return None, 2, None, None, None  # shouldn't happen (resolve_gemini would have 402'd)
@@ -4901,7 +4930,7 @@ async def _run_job_remote(job_id, job_data):
 @app.get("/health")
 async def health():
     """Lightweight liveness probe for uptime monitoring."""
-    return {"status": "ok"}
+    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True}}
 
 
 @app.get("/health/ready")
@@ -5718,7 +5747,7 @@ async def process_endpoint(
 
     print(f"[attestation] job={job_id} ip={attestation['ip']} source={attestation['source']} ack=true")
 
-    # Meter + reserve minutes for managed users (no-op for BYOK / self-host).
+    # Meter managed users and validate explicit source ranges for every mode.
     # A refusal (402 quota, 429 job limit, 400 unreadable source) deletes the
     # source it was handed instead of leaving up to MAX_FILE_SIZE_MB on disk
     # until the retention sweep; an agent upload goes back to its slot.
@@ -8242,9 +8271,9 @@ async def social_post_status(request_id: str, request: Request):
     itself can still fail per platform, and the dashboard used to say "Posted
     successfully!" either way.
     """
-    owner = _post_request_owners.get(request_id)
-    if owner is None:
+    if request_id not in _post_request_owners:
         return {"status": "unknown"}
+    owner = _post_request_owners[request_id]
     if owner != await _owner_id(request):
         raise HTTPException(status_code=404, detail="Not found")
     upload_key, _ = await resolve_upload_post(request, None)
@@ -8255,17 +8284,53 @@ async def social_post_status(request_id: str, request: Request):
             resp = await client.get("https://api.upload-post.com/api/uploadposts/status",
                                     headers={"Authorization": f"Apikey {upload_key}"},
                                     params={"request_id": request_id})
+            resp.raise_for_status()
             data = resp.json()
+        except httpx.RequestError:
+            raise HTTPException(status_code=503, detail=(
+                "Publication status temporarily unavailable. Try again later.")) from None
+        except httpx.HTTPStatusError as exc:
+            # A polling outage is not an unknown publication: keep callers polling.
+            if exc.response.status_code == 429 or 500 <= exc.response.status_code < 600:
+                raise HTTPException(status_code=503, detail=(
+                    "Publication status temporarily unavailable. Try again later.")) from None
+            return {"status": "unknown"}
         except Exception:
             return {"status": "unknown"}
-    results = [
-        {"platform": r.get("platform"), "success": r.get("success"),
-         "message": r.get("message") or r.get("error")}
-        for r in (data.get("results") or []) if isinstance(r, dict)
-    ] if isinstance(data, dict) else []
-    status = (data or {}).get("status") or "unknown"
+    statuses = ("pending", "queued", "processing", "in_progress", "completed", "failed", "not_found")
+    if (not isinstance(data, dict) or data.get("status") not in statuses
+            or not isinstance(data.get("results", []), list)
+            or any(not isinstance(r, dict) for r in data.get("results", []))):
+        return {"status": "unknown", "results": []}
+    provider_id = data.get("request_id")
+    if provider_id is not None and (
+            not isinstance(provider_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", provider_id)):
+        return {"status": "unknown", "results": []}
+    status = data["status"]
+    results = []
+    for r in data.get("results", []):
+        platform = r.get("platform")
+        message = r.get("message") or r.get("error")
+        result = {"platform": platform if isinstance(platform, str) else None,
+                  "success": r.get("success") is True and isinstance(platform, str) and bool(platform.strip()),
+                  "message": message if isinstance(message, str) else None}
+        # Completion also includes skips and drafts; preserve the evidence, never coerce it.
+        for flag in ("skipped", "fallback_to_inbox"):
+            if flag in r:
+                result[flag] = r[flag] if type(r[flag]) is bool else None
+                if result[flag] is None:
+                    result["success"] = False
+        if "status" in r:
+            result["status"] = r["status"] if r["status"] in (
+                "queued", "processing", "completed", "failed", "retryable", "skipped") else "unknown"
+            if result["status"] == "unknown":
+                result["success"] = False
+        results.append(result)
     _log_post_failures(request_id, status, results)
-    return {"status": status, "results": results}
+    out = {"status": status, "results": results}
+    if provider_id is not None:
+        out["request_id"] = provider_id
+    return out
 
 
 # request_ids whose failure is already in the log: the dashboard polls every
