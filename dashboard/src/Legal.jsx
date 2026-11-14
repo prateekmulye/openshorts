@@ -87,7 +87,7 @@ export default function Legal() {
                             href={href}
                             className="flex items-start gap-4 p-4 border border-rule rounded-card hover:border-brass transition-colors"
                         >
-                            <Icon size={18} className="text-brass shrink-0 mt-0.5" />
+                            {React.createElement(Icon, { size: 18, className: 'text-brass shrink-0 mt-0.5' })}
                             <span>
                                 <span className="block text-ink font-medium">{title}</span>
                                 <span className="block text-sm text-muted mt-1">{desc}</span>
