@@ -48,7 +48,9 @@ class TestPlanSourceRange:
         assert app_module.plan_source_range(45, ("600", None)) == {
             "start_seconds": 600.0, "end_seconds": 2700.0}
 
-    @pytest.mark.parametrize("rng", [(10, 40), (500, 100), ("a", 100)])
+    @pytest.mark.parametrize("rng", [(10, 40), (500, 100), ("a", 100),
+                                      ("nan", 100), (0, "nan"),
+                                      ("-inf", 100), (0, "inf")])
     def test_too_short_backwards_or_garbage_is_a_400(self, rng):
         with pytest.raises(HTTPException) as e:
             app_module.plan_source_range(45, rng)
@@ -140,6 +142,111 @@ def test_source_range_reaches_the_reservation_and_the_job(dirs, monkeypatch):
     assert job["env"]["MAX_SOURCE_MINUTES"] == "5.5000"
     manifest = json.load(open(os.path.join(out_root, resp.json()["job_id"], app_module._RESUME_FILE)))
     assert manifest["partial"] == partial
+
+
+@pytest.fixture()
+def selfhost_source(dirs, monkeypatch):
+    """Only external source lookup is faked; reservation and enqueue are real."""
+    monkeypatch.setattr(app_module, "BILLING_ENABLED", False)
+
+    async def _validate(url):
+        pass  # Public-URL DNS lookup is covered by the SSRF tests.
+    monkeypatch.setattr(app_module, "_validate_source_url", _validate)
+    monkeypatch.setattr(app_module, "_media_duration_seconds", lambda path: 2700.0)
+    return dirs
+
+
+def _submit_selfhost_range(fields, upload=False):
+    async def _do():
+        transport = httpx.ASGITransport(app=app_module.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            if upload:
+                return await client.post("/api/process", data={"acknowledged": "true", **fields},
+                                         files={"file": ("source.mp4", b"test fixture")},
+                                         headers={"X-Gemini-Key": "test-key"})
+            return await client.post("/api/process", json={
+                "url": "https://www.youtube.com/watch?v=long", "acknowledged": True,
+                **fields}, headers={"X-Gemini-Key": "test-key"})
+    return asyncio.run(_do())
+
+
+@pytest.mark.parametrize("upload", [False, True], ids=["url", "upload"])
+@pytest.mark.parametrize("fields,start,end,length,minutes", [
+    ({"source_start": 900, "source_end": 1800}, "900.000", 1800.0, "15.0000", 15),
+    ({"source_start": 900}, "900.000", 2700.0, "30.0000", 30),
+    ({"source_start": 130, "source_end": 460}, "130.000", 460.0, "5.5000", 5.5),
+    ({"source_start": 900, "source_end": 960}, "900.000", 960.0, "1.0000", 1),
+])
+def test_selfhost_range_enqueues_and_resumes_exact_cut(
+        selfhost_source, monkeypatch, upload, fields, start, end, length, minutes):
+    out_root, _ = selfhost_source
+    response = _submit_selfhost_range(fields, upload)
+    assert response.status_code == 200, response.text
+    job_id = response.json()["job_id"]
+    job = app_module.jobs[job_id]
+    assert job["env"]["SOURCE_START_SECONDS"] == start
+    assert job["env"]["MAX_SOURCE_MINUTES"] == length
+    assert job["reservation_id"] is None and job["user_id"] is None
+    partial = {"processed_minutes": minutes, "total_minutes": 45.0,
+               "start_seconds": float(start), "end_seconds": end, "chosen": True}
+    assert job["partial"] == partial
+    manifest = json.loads((out_root / job_id / app_module._RESUME_FILE).read_text())
+    assert manifest["partial"] == partial
+    monkeypatch.setattr(app_module, "jobs", {})
+    monkeypatch.setattr(app_module, "job_queue", asyncio.PriorityQueue())
+    app_module._resume_interrupted_jobs()
+    resumed = app_module.jobs[job_id]
+    assert resumed["env"]["SOURCE_START_SECONDS"] == start
+    assert resumed["env"]["MAX_SOURCE_MINUTES"] == length
+
+
+@pytest.mark.parametrize("fields", [{}, {"source_start": 0}, {"source_end": 2700}])
+def test_selfhost_whole_source_has_no_cut(selfhost_source, fields):
+    response = _submit_selfhost_range(fields)
+    assert response.status_code == 200, response.text
+    job = app_module.jobs[response.json()["job_id"]]
+    assert job["partial"] is None
+    assert "SOURCE_START_SECONDS" not in job["env"]
+    assert "MAX_SOURCE_MINUTES" not in job["env"]
+
+
+def test_selfhost_without_range_does_not_probe_at_reservation(monkeypatch):
+    async def _unexpected(url):
+        pytest.fail("No-range reservation must not probe the source")
+    monkeypatch.setattr(app_module, "_probe_youtube_quality", _unexpected)
+    assert asyncio.run(app_module.reserve_process_minutes(None, "unused", None, "job")) == (
+        None, 2, None, None, None)
+
+
+@pytest.mark.parametrize("start,end", [
+    (900, 800), (900, 959), (2700, None), ("nan", 1800),
+    (900, "nan"), ("-inf", 1800), (900, "inf"), ("garbage", 1800),
+])
+def test_selfhost_invalid_range_is_rejected_before_enqueue(selfhost_source, start, end):
+    response = _submit_selfhost_range({"source_start": start, "source_end": end})
+    assert response.status_code == 400, response.text
+    assert app_module.jobs == {}
+    assert list(selfhost_source[0].iterdir()) == []
+
+
+@pytest.mark.parametrize("duration", [0, float("nan"), float("inf")])
+def test_selfhost_unknown_duration_cannot_accept_a_range(selfhost_source, monkeypatch, duration):
+    async def _probe(url):
+        return {"duration": duration, "max_height": 1080}
+    monkeypatch.setattr(app_module, "_probe_youtube_quality", _probe)
+    response = _submit_selfhost_range({"source_start": 900, "source_end": 1800})
+    assert response.status_code == 400, response.text
+    assert app_module.jobs == {}
+
+
+def test_health_advertises_source_ranges():
+    async def _do():
+        transport = httpx.ASGITransport(app=app_module.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.get("/health")
+    response = asyncio.run(_do())
+    assert response.status_code == 200
+    assert response.json()["capabilities"]["source_ranges"] is True
 
 
 def test_estimate_without_billing_says_so():

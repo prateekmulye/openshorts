@@ -1,0 +1,28 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_engine_range",
+  "security_reviewer": "/root/security_console",
+  "date": "2026-11-13 PST",
+  "base": "f56560e750bf7a38ec85dae9233abb0078928451",
+  "verified": {
+    "app.py": "9441dbd9320759f2935a87506b00ffce63510e50",
+    "tests/test_minutes_transparency.py": "92ef03422fc0e4b5fc37faa82577a3718c13b2f0"
+  },
+  "evidence": {
+    "tests_passed": 1563,
+    "tests_skipped": 58,
+    "test_first": "20 failed, 4 passed before fix",
+    "mutation": "Disabled self-host range branch caused 16 targeted failures; nonfinite guard mutation also caught.",
+    "local_media": "Synthetic FFmpeg cuts and resume checked; no real source media."
+  },
+  "not_checked": [
+    "Live providers and credentials",
+    "Full ML worker/GPU paths",
+    "Frame-exact content boundaries",
+    "Deployment"
+  ],
+  "limits": [
+    "Requested URL ranges perform an additional existing duration probe.",
+    "Skips include missing dependencies and unavailable hardware/platform paths."
+  ]
+}

@@ -436,12 +436,16 @@ def plan_source_range(probed_minutes, source_range):
     if not source_range:
         return None
     start_raw, end_raw = source_range
-    duration = max(0.0, float(probed_minutes) * 60.0)
+    duration = float(probed_minutes) * 60.0
+    if not math.isfinite(duration) or duration <= 0:
+        raise HTTPException(status_code=400, detail="Could not determine the video duration. Try a different source.")
     try:
         start = float(start_raw) if start_raw not in (None, "") else 0.0
         end = float(end_raw) if end_raw not in (None, "") else duration
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="source_start / source_end must be seconds.")
+    if not math.isfinite(start) or not math.isfinite(end):
+        raise HTTPException(status_code=400, detail="source_start / source_end must be finite seconds.")
     start = max(0.0, start)
     end = min(duration, end) if duration else end
     if start <= 1.0 and (not duration or end >= duration - 1.0):
@@ -556,7 +560,8 @@ async def reserve_process_minutes(request, url, input_path, job_id, max_minutes=
     clips only that stretch: it is billed alone and comes back as a partial
     with ``start_seconds`` and ``chosen``.
 
-    BYOK / self-host requests don't consume minutes (priority 2, no reservation).
+    BYOK / self-host requests don't consume minutes (priority 2, no reservation),
+    but an explicit source range is still validated and returned as a cut.
     For a managed (entitled, no BYOK header) request this probes the input
     duration, enforces the per-user concurrent-job limit, and reserves minutes —
     raising 402 (quota) or 429 (too many jobs) as needed.
@@ -567,7 +572,24 @@ async def reserve_process_minutes(request, url, input_path, job_id, max_minutes=
     on the operator's key for free. Only skip metering when billing is off.
     """
     if not BILLING_ENABLED:
-        return None, 2, None, None, None
+        partial = None
+        if source_range:
+            # shortcut: reuse existing probes; share quality-gate results if repeat lookups matter.
+            if url:
+                probe = await _probe_youtube_quality(url)
+                seconds = probe.get("duration")
+            else:
+                seconds = await asyncio.get_event_loop().run_in_executor(
+                    None, _media_duration_seconds, input_path)
+            try:
+                minutes = float(seconds) / 60.0
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="Could not determine the video duration. Try a different source.")
+            chosen = plan_source_range(minutes, source_range)
+            if chosen is not None:
+                partial = {"processed_minutes": (chosen["end_seconds"] - chosen["start_seconds"]) / 60.0,
+                           "total_minutes": minutes, **chosen, "chosen": True}
+        return None, 2, None, None, partial
     user = await _user_from_request(request)
     if not managed_keys.has_active_entitlement(user):
         return None, 2, None, None, None  # shouldn't happen (resolve_gemini would have 402'd)
@@ -3296,7 +3318,7 @@ async def run_job(job_id, job_data):
 @app.get("/health")
 async def health():
     """Lightweight liveness probe for uptime monitoring."""
-    return {"status": "ok"}
+    return {"status": "ok", "capabilities": {"source_ranges": True}}
 
 
 @app.get("/health/ready")
@@ -3935,7 +3957,7 @@ async def process_endpoint(
 
     print(f"[attestation] job={job_id} ip={attestation['ip']} source={attestation['source']} ack=true")
 
-    # Meter + reserve minutes for managed users (no-op for BYOK / self-host).
+    # Meter managed users and validate explicit source ranges for every mode.
     # A refusal (402 quota, 429 job limit, 400 unreadable source) deletes the
     # source it was handed instead of leaving up to MAX_FILE_SIZE_MB on disk
     # until the retention sweep; an agent upload goes back to its slot.
