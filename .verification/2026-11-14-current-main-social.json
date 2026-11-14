@@ -1,0 +1,23 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_refreshed_ports",
+  "security_reviewer": "/root/security_upstream",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "app.py": "1c33dc34fbdc3b90a5a1ab79a7729c7b7ddc6798",
+    "tests/test_social_post_job_gone.py": "a08d1d492ffde8331c93e60d4398829945614efb"
+  },
+  "evidence": {
+    "test_first": "1 failed, 4 passed before implementation",
+    "independent_full_suite": "1941 passed, 64 skipped, 6 warnings",
+    "focused": "5 passed with ASGI and fake providers",
+    "mutation": "Removing post-await guard returned 500 instead of literal expected 404; restored 5 passed",
+    "security": "14 passed; missing-job, falsey lookup and ownership mutations caught"
+  },
+  "not_checked": [
+    "Later-await job deletion races",
+    "Live auth or publication",
+    "Production runtime or deployment"
+  ]
+}
