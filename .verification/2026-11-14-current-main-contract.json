@@ -1,0 +1,27 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_current_contract",
+  "security_reviewer": "/root/security_upstream",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "app.py": "66aa35370b6671c6aba9482ee583555d63c801c0",
+    "tests/test_minutes_transparency.py": "816b2a04b862db197873e45af563f8b2814d52e5",
+    "tests/test_social_publication_outcomes.py": "ae2bce5abdb9123b54a9391e932b6da2aeff629d"
+  },
+  "evidence": {
+    "test_first": "81 failures before recovery; 9 transient-poll failures before correction",
+    "independent_full_suite": "2045 passed, 64 skipped, 6 warnings",
+    "actual_client_bridge": "12 passed: actual Wheelman EngineClient to local ASGI and fake provider; transient failures retain processing without POST",
+    "synthetic_media": "Actual 45..105 second range from120s fixture produced60.0s, expectedblue/green frames and identicalresume bytes; optionalML imports isolated",
+    "independent_mutations": "Disabled range handling, removed outcome flags, swallowed HTTP and transport errors all caught; security redaction/503 mutations also caught",
+    "compatibility": "300 finite range cases preserve upstream clamping/minimum semantics; submit/scheduling/downloader implementation unchanged",
+    "security_targeted": "144 passed, 1 skipped"
+  },
+  "not_checked": [
+    "Live providers/auth/credentials/publication",
+    "Deployment or full ML/GPU worker",
+    "Missing Stripe, scenedetect, yt-dlp, maxminddb, flock, GeoIP fixtures and GPU tooling",
+    "Separate media/dependency release gates"
+  ]
+}
