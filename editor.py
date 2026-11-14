@@ -374,8 +374,10 @@ class VideoEditor:
         if not s.strip() or any(c in s for c in "@\\[];\n\r\x00"):
             return True
         for part in cls._split_filter_chain(s):
-            name = part.strip().split("=", 1)[0].strip()
-            if name not in cls._ALLOWED_FILTERS:
+            name, _, arguments = part.strip().partition("=")
+            # FFmpeg's /option syntax loads a file; quoted keys do too.
+            if (name.strip() not in cls._ALLOWED_FILTERS
+                    or re.search(r"(?:^|:)\s*/", arguments.replace("'", ""))):
                 return True
         return False
 

@@ -1,0 +1,27 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_refreshed_ports",
+  "security_reviewer": "/root/security_upstream",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "editor.py": "642a12e7a4373767d0cd55153e4a047973228a1a",
+    "hooks.py": "48ad4d2b8c2ba598fc66d3f8d2fcd092daa24b2c",
+    "tests/test_media_guard_corrections.py": "86ac9e901d8c9ef2e2f7cba7555d87a1b1b0c65d"
+  },
+  "evidence": {
+    "test_first": "29 failed before implementation",
+    "independent_full_suite": "1991 passed, 64 skipped, 6 warnings",
+    "focused": "91 passed with real synthetic FFmpeg; independent overlay frame pixels checked",
+    "security": "125 passed; six isolated guard mutations caught",
+    "verifier_mutations": "Slash option, bool duration and overflow guards removed: 22, 2 and 2 failures; restored 91 passed",
+    "preservation": "Current upstream job-file tests and tempfile hooks unchanged"
+  },
+  "not_checked": [
+    "Live models or providers",
+    "GPU/container runtime",
+    "Real libass subtitle burn",
+    "Complete subprocess isolation",
+    "Separate dependency security update"
+  ]
+}
