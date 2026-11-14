@@ -1,0 +1,22 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/verify_refreshed_ports",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "verified": {
+    "main.py": "59fba417a1b996a4248a7054d13cf501ad0bc430",
+    "tests/test_cli_output_paths.py": "8b2a5c9a2367f101ab788c56048c7bb27ba3a7c7"
+  },
+  "evidence": {
+    "test_first": "4 failed, 11 passed before fix",
+    "independent_full_suite": "1951 passed, 64 skipped, 6 warnings",
+    "targeted": "15 passed including real synthetic FFmpeg seam",
+    "mutation": "Removing extensionless-directory classification caused 3 failures; restored 15 passed"
+  },
+  "not_checked": [
+    "Live downloads or auth",
+    "Full ML reframing",
+    "Deployment or GPU runtime",
+    "Skipped optional dependencies/platform cases"
+  ]
+}
