@@ -97,7 +97,14 @@ async def google_callback(request: Request):
     if oauth is None:
         raise HTTPException(status_code=404, detail="Google login not configured")
     try:
-        token = await oauth.google.authorize_access_token(request)
+        # Explicit options replace Authlib's issuer defaults: pin both claims.
+        token = await oauth.google.authorize_access_token(request, claims_options={
+            "iss": {"essential": True, "value": "https://accounts.google.com"},
+            "aud": {
+                "essential": True, "value": settings.google_client_id,
+                "validate": lambda claims, value: value == settings.google_client_id or value == [settings.google_client_id],
+            },
+        })
     except Exception:
         return RedirectResponse(f"{settings.frontend_url}/#/auth/callback?error=oauth")
 

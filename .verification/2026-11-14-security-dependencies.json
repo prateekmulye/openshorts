@@ -1,0 +1,44 @@
+{
+  "verdict": "PASS",
+  "scope": "Bounded dependency compatibility and Google callback validation; not production image acceptance",
+  "reviewer": "/root/verify_refreshed_ports",
+  "security_reviewer": "/root/security_upstream",
+  "date": "2026-11-14",
+  "base": "8af4a48a2bdda96c9a02bb8df3f09d4e7ec99e0f",
+  "upstream_pr": "https://github.com/mutonby/openshorts/pull/122",
+  "upstream_head": "7a7da46646409ed80e152b5448cb0d2b27e48116",
+  "verified": {
+    "requirements.txt": "9186eb064704ad9006dba6fa834cc6085713d60e",
+    "requirements-billing.txt": "f5ae7dd8cbe6697113ad2316a2cd31b2e9fcde89",
+    "requirements-cpu.lock": "4484a3bb7984fd9e363944e9645de7ebb0596b61",
+    "requirements-gpu.lock": "c44cb4ea829e03e93b8801ae6c00d8f6328509b5",
+    "cloud/oauth.py": "6fffb76a2895ff6417ce59ee34e3d255906124ad",
+    "tests/test_security_dependency_compatibility.py": "bdf3dbc5a0b19d89b569452a1f1dc4104ee77bab"
+  },
+  "environment": {
+    "python": "3.13.5",
+    "isolated_no_system_site_packages": true,
+    "Pillow": "13.0.0",
+    "Authlib": "1.9.5",
+    "PyJWT": "2.15.1",
+    "joserfc": "1.8.0",
+    "pip_check": "No broken requirements found"
+  },
+  "evidence": {
+    "test_first": "Old nonce/version checks failed; callback audience scalar/list negatives failed before correction; unknown extra-audience negative failed before final hook",
+    "independent_relevant_suite": "97 passed",
+    "independent_compatibility": "31 passed",
+    "mutations": "Remove audience block: 3 failures; remove issuer: 1 failure; remove extra-audience hook: 1 failure; restored 31 passed",
+    "security": "Independent 31 passed and all three corresponding guard mutations caught",
+    "actual_execution": "Real libraries, crypto, JWT, image processing, Google login/callback and login-code generation",
+    "faked_boundaries": "Provider HTTP and database IO; no real persistence or Google acceptance claimed",
+    "full_suite_attempt": "Collection blocked: 19 errors and 44 skips from missing runtime dependencies including boto3/numpy/cv2; environment limitation, not a candidate defect"
+  },
+  "not_checked": [
+    "Full application suite or complete CPU/GPU locked installation",
+    "Linux Python 3.11, Docker/GPU or full ML rendering",
+    "Live Google/provider auth or real database persistence",
+    "Full deployed session middleware and external exploitability",
+    "Production deployment"
+  ]
+}
