@@ -466,97 +466,13 @@ ${FOOTER_COLUMNS.map(
   ${esc(t.footer.lastUpdated)} ${esc(SITE.updated)}.</p>
 </div></footer>`
 
-/* Product analytics for the static pages.
- *
- * These pages are served straight from nginx and never hydrate React, so the
- * consent manager that boots the tracker in the app (src/lib/consent.js) never
- * runs here. Without this block their traffic is invisible: they were ranking
- * at positions 1.8 to 4 and reporting nothing at all.
- *
- * The shim, the placeholder gate and ANALYTICS_HOSTS are the same ones
- * index.html uses, on purpose — one deployment, one switch. The placeholders
- * are substituted at build time by vite-plugin-seo.js (Vite only rewrites
- * index.html, and these files are emitted as assets), so an unset
- * VITE_OPENPANEL_* still yields an inert page: no init, no script, no request.
- *
- * The call is unconditional because first-party audience measurement is exempt
- * from prior consent (AEPD/CNIL criteria) and is always on in the app too; the
- * banner only gates marketing, of which there is none on these pages. */
-const ANALYTICS = `
-<script>
-  window.op = window.op || function () { var n = []; return new Proxy(function () { arguments.length && n.push([].slice.call(arguments)); }, { get: function (t, r) { return "q" === r ? n : function () { n.push([r].concat([].slice.call(arguments))); }; }, has: function (t, r) { return "q" === r; } }); }();
-  window.__osAnalyticsInit = (function () {
-    var started = false;
-    return function () {
-      if (started) return false;
-      var apiUrl = "%VITE_OPENPANEL_API_URL%";
-      var clientId = "%VITE_OPENPANEL_CLIENT_ID%";
-      var unset = function (v) { return !v || v.charAt(0) === "%"; };
-      if (unset(apiUrl) || unset(clientId)) return false;
-      var ANALYTICS_HOSTS = /^(www\\.)?openshorts\\.app$/;
-      if (!ANALYTICS_HOSTS.test(location.hostname)) return false;
-      started = true;
-      window.op("init", {
-        apiUrl: apiUrl,
-        clientId: clientId,
-        trackScreenViews: true,
-        trackOutgoingLinks: true,
-        trackAttributes: true,
-      });
-      var s = document.createElement("script");
-      s.src = "/op1.js";
-      s.defer = true;
-      s.async = true;
-      document.head.appendChild(s);
-      return true;
-    };
-  })();
-  window.__osAnalyticsInit();
-</script>`
-
-/* First-touch attribution for visits that start on a static page.
- *
- * The app snapshots where a visitor came from (src/lib/attribution.js, key
- * os_attrib) and posts it at signup, but that code only runs once React
- * boots, i.e. on the homepage. A visitor who landed here from Google and then
- * clicked through arrived at the app with a same-origin referrer and
- * landing_path "/", so every signup was credited to the homepage: 7,481 of
- * 7,481 signup_attribution rows in the 30 days to 23-sep-2026. Writing the
- * same key, in the same shape, from the page the visit actually started on
- * fixes it without touching the app (first touch wins on both sides).
- * Independent of the analytics switch: it is first-party localStorage that
- * only ever reaches our own API, exactly like the app's copy. */
-const ATTRIBUTION = `
-<script>
-  (function () {
-    try {
-      var K = "os_attrib";
-      if (localStorage.getItem(K)) return;
-      var q = new URLSearchParams(location.search);
-      var r = document.referrer || "";
-      if (r.indexOf(location.origin) === 0) r = "";
-      localStorage.setItem(K, JSON.stringify({
-        referrer: r,
-        landing_path: location.pathname + location.search,
-        utm_source: q.get("utm_source") || "",
-        utm_medium: q.get("utm_medium") || "",
-        utm_campaign: q.get("utm_campaign") || ""
-      }));
-    } catch (e) { /* private mode */ }
-  })();
-</script>`
-
 /* The body CTA. Until now the only link to the app on these pages was the fixed
  * nav button, so a reader who finished the article had nothing to click: the
  * pages sit at positions 1.8-4 with a 0.2-1.6% CTR and no path into the
  * product. Copy is per page (`page.cta`) because the push differs — a reader
  * on the no-watermark page is arguing about watermarks, not about editing.
  *
- * Plain same-origin link on purpose: utm_* here would overwrite the visitor's
- * real acquisition source (google, reddit...) in lib/attribution.js and split
- * the OpenPanel session. The inline handler reports the click with the page
- * slug, which is what tells us whether the CTA or the nav button is doing the
- * work. */
+ * CTA destinations remain plain links while browser tracking is disabled. */
 /* The line under every "Get free clips" button: the visitor arrives from a
  * "free" or "no watermark" answer, so the button says what free means here. */
 export const CTA_MICROCOPY = `First video free up to 60 min · no card · no watermark from $${EDITIONS.cloud.lowPrice}/month, or self-host free (MIT)`
@@ -581,7 +497,7 @@ const ctaBlock = (page) => {
     <p>${esc(c.body)}</p>
   </div>
   <div class="cta-act">
-    <a class="btn" href="${esc(href)}" onclick="window.op&amp;&amp;window.op('track','SeoCtaClick',{page:'${esc(page.path)}'})">${esc(c.button)}</a>
+    <a class="btn" href="${esc(href)}">${esc(c.button)}</a>
     ${c.button === DEFAULT_CTA.button ? `<small class="cta-micro">${esc(CTA_MICROCOPY)}</small>` : ''}
   </div>
 </div>`
@@ -633,8 +549,6 @@ ${page.noindex ? '' : `<link rel="canonical" href="${canonical}">\n`}<meta name=
   }">
 ${hreflangLinks(page)}<link rel="icon" type="image/png" href="/logo-openshorts.png">
 <link rel="stylesheet" href="/fonts.css">
-${ANALYTICS}
-${page.noindex ? '' : ATTRIBUTION}
 <meta property="og:type" content="${ogType(page)}">
 <meta property="og:url" content="${canonical}">
 <meta property="og:title" content="${esc(page.title)}">

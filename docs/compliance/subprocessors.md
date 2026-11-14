@@ -46,7 +46,7 @@ puede pedirlo en info@openshorts.app.
 | Proveedor | Entidad y país | Qué recibe | Garantía | DPA |
 |---|---|---|---|---|
 | **Upload-Post** | TONVI TECH SL | Publicación en las redes que el usuario conecta; **custodia los tokens OAuth** de TikTok/YouTube/Instagram (OpenShorts no almacena ninguno, solo el nombre de perfil) | Mismo responsable | Sistema interno — su política debe cubrir esta custodia |
-| **OpenPanel** (instancia propia) | TONVI TECH SL — servidores en Alemania | Eventos de uso con el uuid de la cuenta como `profileId`. **Nunca el email** (retirado del `identify` del navegador el 4-sep-2026). Solo tras consentimiento | Dentro del EEE; script servido desde el propio dominio | Sistema interno |
+| **OpenPanel** (instancia propia) | TONVI TECH SL — servidores en Alemania | Analítica opcional y atribución de visitas del navegador desactivadas; no se carga el SDK ni se envían eventos desde el navegador. La instancia propia sigue recibiendo eventos de trabajos e ingresos del servidor con el uuid interno como `profileId`, sin cambios en este alcance | Dentro del EEE; script del navegador desactivado | Sistema interno |
 | **Google (iniciar sesión con Google)** | Google Ireland Ltd. / Google LLC | Solo el ámbito `openid email profile`: dirección e identificador de cuenta | DPF + CCT | Google Terms |
 
 ## 5. Descarga de vídeo (proxies)

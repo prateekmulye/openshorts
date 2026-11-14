@@ -222,12 +222,8 @@ const notFoundPage = () => ({
   faq: [],
 })
 
-/* The analytics block in render.js carries the same %VITE_OPENPANEL_*%
- * placeholders index.html does, but Vite only rewrites index.html: the pages
- * below are emitted as raw assets and never pass through its HTML transform.
- * Substituting here keeps one switch for the whole deployment: unset collapses
- * to an empty string, the page's own `unset()` check catches that and nothing
- * loads — the same inert result index.html gets from its unreplaced literal. */
+/* Compatibility substitution only: current templates contain no analytics
+ * loaders. Providing these values does not enable browser analytics. */
 const substituteAnalyticsEnv = (html, env) => {
   const value = (name) => {
     const v = env[`VITE_${name}`] || process.env[`VITE_${name}`] || ''

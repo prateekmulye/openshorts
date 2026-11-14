@@ -20,7 +20,7 @@ const DOCS = [
     {
         icon: Shield,
         title: 'Privacy Policy',
-        desc: 'What we store, for how long, which providers touch it, and your GDPR rights. Nothing non-essential loads until you accept it.',
+        desc: 'What we store, for how long, which providers touch it, and your GDPR rights. Optional browser analytics and acquisition attribution are disabled.',
         href: '/privacy',
         es: '/privacidad',
     },
@@ -71,7 +71,7 @@ export default function Legal() {
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong className="text-ink">Your videos and clips are yours.</strong> We never use your content to train AI models.</li>
                         <li><strong className="text-ink">You must have the rights</strong> to every video you upload or link, and you are the publisher of what you post.</li>
-                        <li><strong className="text-ink">No advertising trackers.</strong> Audience measurement is first-party and stays off until you accept it; free-plan clips are deleted after 7 days.</li>
+                        <li><strong className="text-ink">No advertising trackers.</strong> Optional browser analytics and acquisition attribution are disabled; free-plan clips are deleted after 7 days.</li>
                         <li><strong className="text-ink">Cancel anytime</strong> from your account. Charged in the last 14 days and never used it? Full refund. EU consumers keep their 14-day withdrawal right on top of that.</li>
                         <li><strong className="text-ink">Delete everything anytime.</strong> Account &rarr; Delete account erases your projects, clips and keys on the spot. No email to us, no waiting.</li>
                     </ul>

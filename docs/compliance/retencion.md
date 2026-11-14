@@ -56,8 +56,9 @@ trabajo, es decir una hora después de la *última* subida de cualquier usuario.
 |---|---|---|
 | Token de sesión (JWT) | 30 días o hasta cerrar sesión | `dashboard/src/lib/api.js` |
 | Token de medios (para descargar tus propios clips) | 12 h, se renueva solo | `dashboard/src/lib/mediaToken.js`, `MEDIA_TOKEN_TTL_SECONDS` |
-| Decisión sobre cookies | Hasta que la cambies, o hasta que cambie la versión del banner | `dashboard/src/lib/consent.js` |
-| Preferencias de interfaz, atribución de primera visita | Hasta que borres los datos del sitio | `dashboard/src/lib/attribution.js` |
+| Registros anteriores de consentimiento | Permanecen intactos; esta versión no los lee, actualiza ni elimina, y no recoge nuevas decisiones | `openshorts_consent`; `dashboard/src/lib/consent.js` está desactivado para seguimiento |
+| Preferencias necesarias de interfaz | Hasta que borres los datos del sitio | `dashboard/src/App.jsx` |
+| Registros anteriores de atribución de primera visita | Permanecen intactos; esta versión no los lee, envía ni elimina, y no recoge nueva atribución | `os_attrib`, `os_attrib_sent`; `dashboard/src/lib/attribution.js` está inactivo |
 | Claves BYOK de proveedores de IA | Hasta que las borres. **Ofuscadas, no cifradas** | `dashboard/src/App.jsx` |
 
 ## 5. Registros, alertas y copias
@@ -67,7 +68,7 @@ trabajo, es decir una hora después de la *última* subida de cualquier usuario.
 | Log de aplicación (stdout del contenedor) | **7 días** en el log rotatorio de Docker | Requiere `max-size`/`max-file` en el runtime — ver "pendiente" abajo |
 | Alertas operativas a Telegram | Las conserva Telegram | **No contienen email ni título de vídeo** desde el 4-sep-2026: identifican al usuario por los 8 primeros caracteres de su uuid (`cloud/alerts.user_ref`) |
 | Copias de seguridad cifradas de PostgreSQL | **30 días** | `ops/pg_backup.sh` — la política promete que una supresión desaparece de toda copia en 30 días, y esto es lo único que lo hace cierto |
-| Analítica (OpenPanel, solo con consentimiento) | Identificadores 13 meses; datos brutos 25 meses | Instancia propia |
+| Analítica (OpenPanel; recogida opcional del navegador desactivada) | Identificadores 13 meses; datos brutos 25 meses | Instancia propia; datos históricos y eventos del servidor sin cambios |
 
 ## 6. Lo que sobrevive deliberadamente a una supresión de cuenta
 

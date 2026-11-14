@@ -654,17 +654,9 @@ in every send, and refusing it stops it permanently while leaving the service
 messages untouched. We do not run a newsletter and we never sell or rent your
 address.</p>
 <h3>Product analytics</h3>
-<p>We measure how the app is used with OpenPanel, running on an instance we
-operate ourselves; the measurement script is served from this domain, not from
-a third party. <strong>Nothing loads until you accept the "audience
-measurement" category in the cookie banner</strong>, and rejecting it is one
-click in the same banner — you can change your mind any time from the
-"cookies" link in the footer. We send the account's internal identifier (a
-random uuid) with these events so we can tell first-time from repeat use; we
-do <em>not</em> send your email address. No advertising pixels, no cross-site
-tracking, nothing shared with anyone. Basis: your consent (Art. 6.1.a GDPR and
-Art. 22.2 of Law 34/2002); withdraw it at any time in the banner or by
-emailing <a href="mailto:info@openshorts.app">info@openshorts.app</a>.</p>
+<p><strong>Optional browser analytics is disabled.</strong> The site does not load
+OpenPanel in your browser or send browser usage events to it. Saved consent
+choices do not enable tracking. Browser acquisition attribution is also disabled. Necessary app storage remains available.</p>
 <h3>Security and anti-abuse</h3>
 <p>Server logs, IP-based rate limits and fraud signals, kept to protect the
 service and its users. Basis: legitimate interest (Art. 6.1.f). Application
@@ -682,26 +674,18 @@ What the site stores falls into two groups.</p>
 it is first-party and lives in your browser's local storage, not in a cookie:
 your session token (keeps you signed in), a short-lived media token (lets your
 browser fetch your own clips and thumbnails, which are not public), your
-interface preferences (last-used editor settings, tab, language), the
-first-visit referrer we record once at sign-up, and — if you use
+interface preferences (last-used editor settings, tab, language), and — if you use
 bring-your-own-key mode — your AI provider API keys. Those keys are
 <em>obfuscated</em>, not encrypted: the value is scrambled so it is not
 readable at a glance in developer tools, which is not the same as
 cryptographic protection, and anyone with access to your browser profile could
 recover them. They are sent only to perform your own jobs and are never stored
-on our servers. Your consent record itself is also stored here.</p>
-<p><strong>Audience measurement — always on, first-party only.</strong> OpenPanel
-(see section 2) writes an anonymous visitor identifier. The script is served
-from this domain; the instance is ours, the data is never shared and never used
-cross-site, which under the AEPD/CNIL criteria exempts it from prior consent.
-The consent banner is only shown to visitors in the EEA, the UK and Switzerland;
-identifiers live no longer than 13 months and raw data no longer than 25
-months. "Reject all" and "Accept all" sit side by side in the banner, and the
-"cookies" link in the footer reopens it so you can withdraw consent as easily
-as you gave it.</p>
+on our servers. Legacy consent and acquisition attribution records may remain
+in your browser; this version does not read, submit, or delete them.</p>
+<p><strong>Audience measurement — disabled.</strong> No browser measurement script
+is loaded, including when a previous consent record allowed it.</p>
 <p><strong>Marketing.</strong> We use no advertising or remarketing trackers.
-The category exists in the banner so that if we ever add one it starts
-switched off.</p>
+There are no optional browser trackers to enable.</p>
 
 <h2>4. Who receives data (processors) and where</h2>
 <p>Every provider we use, what each one receives, and where it is. The
@@ -742,9 +726,10 @@ connections produce. Operated by TONVI TECH SL under this same policy.</li>
 Spanish legal invoice for your payment and therefore receives your billing
 name, address and email from Stripe. Operated by TONVI TECH SL, servers in
 Germany.</li>
-<li><strong>OpenPanel</strong> — first-party audience measurement, exempt
-from prior consent (section 3). The instance is ours and runs on our own servers in Germany;
-the script is served from this domain.</li>
+<li><strong>OpenPanel</strong> — our own instance in Germany receives
+server-side job and revenue events with the internal account identifier.
+Browser analytics and acquisition attribution are disabled; no browser
+tracking script is loaded.</li>
 <li><strong>Namecheap Private Email</strong> — delivery of service emails.
 USA.</li>
 <li><strong>Google (sign in with Google)</strong> — only if you choose it, and
@@ -913,18 +898,11 @@ todos sus envíos, y darte de baja lo detiene de forma permanente sin afectar a
 los mensajes de servicio. No tenemos boletín y jamás vendemos ni cedemos tu
 dirección.</p>
 <h3>Analítica de producto</h3>
-<p>Medimos el uso de la aplicación con OpenPanel, en una instancia que
-operamos nosotros mismos; el script de medición se sirve desde este dominio y
-no desde un tercero. <strong>No se carga nada hasta que aceptas la categoría
-"medición de audiencia" en el banner de cookies</strong>, y rechazarla es un
-solo clic en ese mismo banner — puedes cambiar de opinión cuando quieras desde
-el enlace "cookies" del pie de página. Con esos eventos enviamos el
-identificador interno de la cuenta (un uuid aleatorio) para distinguir el
-primer uso del uso recurrente; <em>no</em> enviamos tu dirección de email. Sin
-píxeles publicitarios, sin seguimiento entre sitios, sin compartir nada con
-nadie. Base: tu consentimiento (art. 6.1.a RGPD y art. 22.2 de la Ley
-34/2002); puedes retirarlo cuando quieras en el banner o escribiendo a
-<a href="mailto:info@openshorts.app">info@openshorts.app</a>.</p>
+<p><strong>La analítica opcional del navegador está desactivada.</strong> El sitio
+no carga OpenPanel en tu navegador ni le envía eventos de uso del navegador.
+Las decisiones de consentimiento guardadas no activan el seguimiento. La
+atribución de visitas desde el navegador también está desactivada. El
+almacenamiento necesario para la aplicación sigue disponible.</p>
 <h3>Seguridad y antiabuso</h3>
 <p>Registros del servidor, límites de uso por IP y señales de fraude,
 conservados para proteger el servicio y a sus usuarios. Base: interés legítimo
@@ -944,27 +922,19 @@ Todo es de primera parte y vive en el almacenamiento local de tu navegador, no
 en una cookie: tu token de sesión (te mantiene identificado), un token de
 medios de vida corta (permite que tu navegador descargue tus propios clips y
 miniaturas, que no son públicos), tus preferencias de interfaz (últimos
-ajustes del editor, pestaña, idioma), el referente de la primera visita que
-registramos una sola vez al darte de alta y — si usas el modo con claves
+ajustes del editor, pestaña, idioma) y — si usas el modo con claves
 propias — tus claves API de proveedores de IA. Esas claves están
 <em>ofuscadas</em>, no cifradas: el valor se transforma para que no sea
 legible de un vistazo en las herramientas de desarrollo, lo cual no es
 protección criptográfica, y quien tenga acceso a tu perfil de navegador podría
 recuperarlas. Solo se envían para ejecutar tus propios trabajos y nunca se
-almacenan en nuestros servidores. El registro de tu decisión sobre cookies
-también se guarda aquí.</p>
-<p><strong>Medición de audiencia — siempre activa, solo de primera parte.</strong>
-OpenPanel (ver apartado 2) escribe un identificador anónimo de visitante. El
-script se sirve desde este dominio; la instancia es nuestra, los datos no se
-ceden ni se usan entre sitios, lo que según el criterio de la AEPD y la CNIL la
-exime de consentimiento previo. El banner solo se muestra a visitantes del EEE,
-Reino Unido y Suiza; los identificadores no viven más de 13 meses y los datos brutos
-no más de 25. "Rechazar todo" y "Aceptar todo" están uno al lado del otro en
-el banner, y el enlace "cookies" del pie de página lo reabre para que retirar
-el consentimiento cueste lo mismo que darlo.</p>
+almacenan en nuestros servidores. Pueden quedar registros anteriores de
+consentimiento y atribución de visitas en tu navegador; esta versión no los
+lee, envía ni elimina.</p>
+<p><strong>Medición de audiencia — desactivada.</strong> No se carga ningún script
+de medición en el navegador, aunque un consentimiento anterior lo permitiera.</p>
 <p><strong>Marketing.</strong> No usamos rastreadores publicitarios ni de
-remarketing. La categoría existe en el banner para que, si algún día
-añadiéramos alguno, empiece desactivado.</p>
+remarketing. No hay rastreadores opcionales del navegador que activar.</p>
 
 <h2>4. Quién recibe datos (encargados) y dónde</h2>
 <p>Todos los proveedores que usamos, qué recibe cada uno y dónde está. La
@@ -1009,9 +979,10 @@ misma política.</li>
 emite la factura legal española de tu pago y por tanto recibe de Stripe tu
 nombre fiscal, dirección y email. Operado por TONVI TECH SL, servidores en
 Alemania.</li>
-<li><strong>OpenPanel</strong> — medición de audiencia propia, exenta de
-consentimiento previo (apartado 3). La instancia es nuestra y funciona en nuestros propios
-servidores en Alemania; el script se sirve desde este dominio.</li>
+<li><strong>OpenPanel</strong> — nuestra instancia en Alemania recibe eventos
+de trabajos e ingresos del servidor con el identificador interno de la cuenta.
+La analítica y la atribución de visitas del navegador están desactivadas; no
+se carga ningún script de seguimiento en el navegador.</li>
 <li><strong>Namecheap Private Email</strong> — entrega de los emails de
 servicio. EE. UU.</li>
 <li><strong>Google (iniciar sesión con Google)</strong> — solo si lo eliges, y
@@ -1481,7 +1452,7 @@ export function legalPages() {
       updated: PUBLISHED,
       tldr: [
         'We store your email, your billing reference and the videos you process — nothing beyond what the service needs.',
-        'No advertising trackers: audience measurement is first-party, served from our own domain, and stays off until you accept it in the banner. BYOK API keys are obfuscated in your own browser and never reach our servers.',
+        'No advertising trackers: optional browser analytics is disabled, regardless of saved consent choices. BYOK API keys are obfuscated in your own browser and never reach our servers.',
         'Your content is never used to train AI models. Free-plan clips are deleted after 7 days.',
       ],
       body: PRIVACY_EN,
@@ -1529,7 +1500,7 @@ export function legalPages() {
       lang: 'es',
       tldr: [
         'Guardamos tu email, tu referencia de facturación y los vídeos que procesas — nada más de lo que el servicio necesita.',
-        'Sin rastreadores publicitarios: la medición de audiencia es propia, se sirve desde nuestro dominio y no se activa hasta que la aceptas en el banner. Las claves BYOK viven ofuscadas en tu navegador y nunca llegan a nuestros servidores.',
+        'Sin rastreadores publicitarios: la analítica opcional del navegador está desactivada, independientemente del consentimiento guardado. Las claves BYOK viven ofuscadas en tu navegador y nunca llegan a nuestros servidores.',
         'Tu contenido nunca se usa para entrenar modelos de IA. Los clips del plan gratuito se eliminan a los 7 días.',
       ],
       body: PRIVACY_ES,

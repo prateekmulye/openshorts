@@ -109,8 +109,8 @@ export function AuthProvider({ children }) {
       // a fresh sign-in / sign-up — the top of the conversion funnel.
       if (signedInMe?.user) {
         track('Signup', { props: { method: kind === 'verify' ? 'magic_link' : 'google' } });
-        // Server-side twin of the Signup event: the one place we learn which
-        // channel produced an account. Awaited but never allowed to throw.
+        // Browser attribution is disabled; this compatibility call resolves
+        // without reading storage or posting data.
         await reportAttribution(apiJson);
       }
       // Everyone lands in the app. First-time (unpaid) sign-in gets the Clip

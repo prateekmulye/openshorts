@@ -8,6 +8,9 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 import { build, transform } from 'esbuild';
 import { ESLint } from 'eslint';
+import { renderPage } from '../seo/render.js';
+import { legalPages } from '../seo/legal.js';
+import { buildPages } from '../seo/pages.js';
 
 const source = await readFile('src/lib/consent.js', 'utf8');
 const consentCode = (await transform(source, { format: 'cjs' })).code;
@@ -55,61 +58,107 @@ test('vendored OpenPanel bytes are unchanged', async () => {
     'dcb457dff892d17f6c795c1a933fa7506a6f0067dbba9f8267b3432d460c27ec');
 });
 
-test('consent persistence, listeners, and always-on analytics retain current semantics', () => {
-  // Characterization of current policy, not a legal/compliance endorsement.
-  const f = consentFixture();
-  assert.deepEqual(plain(f.api.getConsent()), { necessary: true, analytics: true, marketing: false });
-  assert.equal(f.api.hasDecided(), false);
-  const seen = [];
-  const unsubscribe = f.api.onConsentChange((value) => seen.push(plain(value)));
-  f.api.onConsentChange(() => { throw new Error('listener failure'); });
-  assert.deepEqual(plain(f.api.acceptAll()), { necessary: true, analytics: true, marketing: true });
-  assert.deepEqual(plain(f.api.rejectAll()), { necessary: true, analytics: true, marketing: false });
-  const stored = JSON.parse(f.values.get('openshorts_consent'));
-  assert.equal(stored.v, 1);
-  assert.equal(stored.necessary, true);
-  assert.equal(stored.analytics, true);
-  assert.equal(stored.marketing, false);
-  assert.ok(Number.isFinite(Date.parse(stored.ts)));
-  assert.equal(f.api.hasDecided(), true);
-  assert.deepEqual(seen.map((v) => v.marketing), [true, false]);
-  unsubscribe();
-  f.api.acceptAll();
-  assert.equal(seen.length, 2);
-  assert.equal(f.starts(), 3);
-  assert.equal(f.requests.length, 0);
-  f.values.set('openshorts_consent', '{broken');
-  assert.equal(f.api.getConsentRecord(), null);
-  f.values.set('openshorts_consent', '{"v":2,"marketing":true}');
-  assert.equal(f.api.getConsentRecord(), null);
-  assert.equal(consentFixture({ country: 'US' }).api.hasDecided(), true);
-});
-
-test('geo lookup keeps same-origin no-store requests and tolerates unavailable storage/network', async () => {
-  for (const options of [{ country: null }, { blocked: true }, { country: null, failFetch: true }, { country: null, response: 'loc=invalid\n' }]) {
-    const f = consentFixture(options);
-    assert.doesNotThrow(() => f.api.rejectAll());
-    await settle();
-    assert.deepEqual(plain(f.requests), [['/cdn-cgi/trace', { cache: 'no-store' }]]);
-    assert.equal(f.starts(), 1);
-    assert.equal(f.values.get('up_geo_cc'), options.blocked ? 'DE' : options.failFetch || options.response ? undefined : 'US');
+// Intentional policy change: the earlier lint-only characterization pinned always-on
+// analytics. The SDK cannot cancel pending sends safely, so optional analytics is
+// now unavailable even after a saved grant; this is not a relaxed expectation.
+test('optional categories stay disabled across all saved choices and storage failures', async () => {
+  for (const blocked of [false, true]) {
+    for (const saved of [null, '{broken', '{"v":1,"analytics":true,"marketing":true}', '{"v":2,"analytics":true,"marketing":true}', '{"v":1,"analytics":false,"marketing":false}']) {
+      const f = consentFixture({ country: 'US', blocked });
+      if (saved) f.values.set('openshorts_consent', saved);
+      f.values.set('session_token', 'fixture-session');
+      f.values.set('media_token', 'fixture-media');
+      const before = [...f.values];
+      assert.deepEqual(plain(f.api.getConsent()), { necessary: true, analytics: false, marketing: false });
+      assert.equal(f.api.applyConsent(), false);
+      await settle();
+      assert.equal(f.starts(), 0);
+      assert.deepEqual(f.requests, []);
+      assert.deepEqual([...f.values], before, 'no consent or operational storage changes');
+    }
   }
 });
 
-test('analytics loader retains configuration, hostname, and once-only gates', async () => {
-  const html = await readFile('index.html', 'utf8');
-  const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((s) => s.includes('window.__osAnalyticsInit'));
-  assert.ok(script);
-  for (const [configured, hostname, expected] of [[false, 'openshorts.app', false], [true, 'preview.example', false], [true, 'openshorts.app', true]]) {
+test('track, identify, and reset cannot queue or send analytics', async () => {
+  const { outputFiles } = await build({ entryPoints: ['src/lib/analytics.js'], bundle: true, write: false, platform: 'node', format: 'cjs' });
+  const queued = [];
+  const values = new Map([['openshorts_consent', '{"v":1,"analytics":true,"marketing":true}']]);
+  const op = (...args) => queued.push(args);
+  op.q = queued;
+  const context = vm.createContext({ module: { exports: {} }, window: { op }, localStorage: { getItem: (key) => values.get(key) ?? null }, fetch: (...args) => queued.push(args) });
+  vm.runInContext(outputFiles[0].text, context);
+  for (const saved of [values.get('openshorts_consent'), null, '{broken']) {
+    values.set('openshorts_consent', saved);
+    context.module.exports.track('Signup', { props: { source: 'fixture' } });
+    context.module.exports.identify({ id: 'fixture-account' }, { plan: 'fixture' });
+    context.module.exports.reset();
+  }
+  assert.deepEqual(queued, []);
+});
+
+test('attribution never reads stale storage or submits data, including when storage throws', async () => {
+  const { outputFiles } = await build({ entryPoints: ['src/lib/attribution.js'], bundle: true, write: false, platform: 'node', format: 'cjs' });
+  for (const blocked of [false, true]) {
+    const accesses = [];
+    const posts = [];
+    const stored = new Map([['os_attrib', '{"referrer":"https://example.test","landing_path":"/?campaign=fixture"}'], ['os_attrib_sent', '0'], ['session_token', 'fixture-session']]);
+    const before = [...stored];
+    const context = vm.createContext({ module: { exports: {} },
+      localStorage: { getItem(key) { accesses.push(key); if (blocked) throw new Error('blocked'); return stored.get(key); }, setItem(key, value) { accesses.push(key); stored.set(key, value); } },
+    });
+    vm.runInContext(outputFiles[0].text, context);
+    context.module.exports.capture();
+    assert.deepEqual(plain(context.module.exports.firstTouchProps()), {});
+    // This awaited callback is the one AuthContext uses after sign-in; it must resolve.
+    await context.module.exports.report(async (...args) => posts.push(args));
+    assert.deepEqual(posts, []);
+    assert.deepEqual(accesses, []);
+    assert.deepEqual([...stored], before);
+  }
+});
+
+test('SPA and rendered static pages have no analytics loader even with configuration', async () => {
+  const pages = [await readFile('index.html', 'utf8'), ...legalPages().map((page) => renderPage(page))];
+  for (const html of pages) {
     const appended = [];
-    const code = configured ? script.replaceAll('%VITE_OPENPANEL_API_URL%', 'https://analytics.example').replaceAll('%VITE_OPENPANEL_CLIENT_ID%', 'test-client') : script;
-    const context = vm.createContext({ window: {}, location: { hostname }, document: { createElement: () => ({}), head: { appendChild: (s) => appended.push(s) } } });
-    vm.runInContext(code, context);
-    assert.equal(appended.length, 0);
-    assert.equal(context.window.__osAnalyticsInit(), expected);
-    assert.equal(context.window.__osAnalyticsInit(), false);
-    assert.deepEqual(appended.map((s) => s.src), expected ? ['/op1.js'] : []);
+    const storageAccesses = [];
+    const values = new Map([['openshorts_consent', '{"v":1,"analytics":true,"marketing":true}']]);
+    const context = vm.createContext({ window: {}, location: new URL('https://openshorts.app/privacy'), URLSearchParams,
+      localStorage: { getItem: (key) => { storageAccesses.push(key); return values.get(key) ?? null; }, setItem: (key, value) => { storageAccesses.push(key); values.set(key, value); } },
+      document: { referrer: '', querySelector: () => null, createElement: () => ({}), head: { appendChild: (node) => appended.push(node) } } });
+    for (const [, script] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+      vm.runInContext(script.replaceAll('%VITE_OPENPANEL_API_URL%', 'https://analytics.example').replaceAll('%VITE_OPENPANEL_CLIENT_ID%', 'fixture-client'), context);
+    }
+    assert.equal(context.window.op, undefined);
+    assert.equal(context.window.__osAnalyticsInit, undefined);
+    assert.deepEqual(appended, []);
+    assert.deepEqual(storageAccesses, [], 'static pages must not capture attribution');
+    assert.doesNotMatch(html, /src=["'](?:https?:[^"']*)?\/op1\.js/);
   }
+});
+
+test('static CTA handlers and tool events cannot use a stale analytics stub', async () => {
+  const queued = [];
+  const context = vm.createContext({ window: { op: (...args) => queued.push(args) }, module: { exports: {} } });
+  for (const page of buildPages()) {
+    const html = renderPage(page);
+    for (const [, handler] of html.matchAll(/onclick="([^"]*window\.op[^"]*)"/g)) {
+      vm.runInContext(handler.replaceAll('&amp;', '&').replaceAll('&#39;', "'"), context);
+    }
+  }
+  const { outputFiles } = await build({ entryPoints: ['tools/common.js'], bundle: true, write: false, format: 'cjs', define: { 'import.meta.env': '{}' } });
+  vm.runInContext(outputFiles[0].text, context);
+  context.module.exports.track('tool_cta_click', { tool: 'fixture' });
+  assert.deepEqual(queued, []);
+});
+
+test('English and Spanish privacy pages explain analytics is unavailable', () => {
+  const pages = legalPages();
+  const en = renderPage(pages.find((page) => page.path === '/privacy'));
+  const es = renderPage(pages.find((page) => page.path === '/privacidad'));
+  assert.match(en, /Optional browser analytics is disabled/);
+  assert.match(es, /La analítica opcional del navegador está desactivada/);
+  for (const html of [en, es]) assert.doesNotMatch(html, /exempt.*prior consent|exenta de\s+consentimiento|Audience measurement — always on|Medición de audiencia — siempre activa/);
 });
 
 test('legal and pricing pages render every row icon with original dimensions', async () => {

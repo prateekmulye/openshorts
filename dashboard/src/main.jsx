@@ -148,12 +148,10 @@ function Root() {
   return <Landing onLaunchApp={handleLaunchApp} />;
 }
 
-// Before React mounts: AuthContext rewrites the URL on auth redirects, which
-// would destroy the referrer and any UTM params we still need to read.
+// Browser acquisition attribution is disabled; the compatibility call is inert.
 captureAttribution();
 
-// Start whatever the visitor previously agreed to. Nothing at all on a first
-// visit: index.html only publishes the analytics initialiser, it never runs it.
+// Browser analytics is disabled regardless of saved consent.
 applyConsent();
 
 createRoot(document.getElementById('root')).render(

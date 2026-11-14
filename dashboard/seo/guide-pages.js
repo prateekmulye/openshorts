@@ -887,7 +887,7 @@ ${html}
     <strong>${esc(title)}</strong>
     <p>${esc(body)}</p>
   </div>
-  <a class="btn" href="${esc(APP_URL)}" onclick="window.op&amp;&amp;window.op('track','SeoCtaClick',{page:'${esc(path)}',position:'end'})">Paste a link</a>
+  <a class="btn" href="${esc(APP_URL)}">Paste a link</a>
 </div>`
 
 const howToSteps = (path, name, description, steps, extra = {}) => ({
