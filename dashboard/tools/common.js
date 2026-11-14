@@ -9,14 +9,8 @@
 // Same variable the app uses. Empty means same-origin (self-host behind one host).
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
-/* OpenPanel events. window.op is the queueing stub the page head defines; it
- * only ever flushes when the analytics init passed its host/placeholder guard,
- * so on localhost, a fork or a preview build this records nothing. */
-export function track(event, props) {
-  try {
-    if (typeof window.op === 'function') window.op('track', event, props || {})
-  } catch (_) { /* analytics must never break a tool */ }
-}
+// Optional browser analytics is disabled, including calls from static tools.
+export function track() {}
 
 export const $ = (id) => document.getElementById(id)
 

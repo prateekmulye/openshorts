@@ -1,0 +1,78 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/analytics_consent_verifier",
+  "security_reviewer": "/root/analytics_consent_security",
+  "date": "2026-11-14",
+  "scope": "Disabled optional browser analytics and acquisition attribution only; not production release or backend telemetry clearance",
+  "base": "2bcef3596d9535cd460f9e795f4f49b92352c8de",
+  "verified": {
+    "dashboard/index.html": "ec7c3d0cb6d7d312af3a183fb5dd688f2acdd78b",
+    "dashboard/seo/guide-pages.js": "431e9c719885e9b74d20b8de4baeaa6e508f08ea",
+    "dashboard/seo/legal.js": "0b5167900473380ae9a8cf692690e966bfc5b6cd",
+    "dashboard/seo/pricing-page.js": "e696ccadc0d2f697d7435e8d9f6dc06915968250",
+    "dashboard/seo/render.js": "d94b834f875c51c77c73ad35827a81d0540dccd8",
+    "dashboard/src/Legal.jsx": "ecb7352ba881a22ffdd4b96ad5b5f72b89e6e5e8",
+    "dashboard/src/components/CookieBanner.jsx": "76c89a7b5d66546538e9a89a4832a6fcc344d05f",
+    "dashboard/src/contexts/AuthContext.jsx": "7bd8935addeef7627821efbc85ccf8756a6ab12c",
+    "dashboard/src/lib/analytics.js": "e771efa79006f2f06ed638177c207d6558a07bbf",
+    "dashboard/src/lib/attribution.js": "7e9f00b1a0c96f99646886055646c005725ac88d",
+    "dashboard/src/lib/consent.js": "8421c24187a82205479709858e82257a4b41c2c7",
+    "dashboard/src/main.jsx": "dbee13e748f91ddf99076967f0723e81922a6d3c",
+    "dashboard/tests/lint-regression.test.mjs": "6757a92b76c56883fc2b663b9333de155d3c1692",
+    "dashboard/tools/common.js": "110ad930d5ed48e8443fd1e86fc0741a17aa9082",
+    "dashboard/vite-plugin-seo.js": "175d830eaecbb42265682fb3038d39c373b3ef3a",
+    "docs/architecture/seo-and-tools.md": "d0507738017a886fab8574f47f6f7124bab10dac",
+    "docs/compliance/retencion.md": "bd3ce97e47381aa7559606bb4479762e714ada48",
+    "docs/compliance/subprocessors.md": "5849ae30c1b4e387ed491332cd068f825f6b8536"
+  },
+  "sha256": {
+    "dashboard/index.html": "58932bf7f919086f2365e931c5e8a4d8acb33e50577dd7f6365a50e942431d44",
+    "dashboard/seo/guide-pages.js": "f4f26beb40198001ed98a10308eb6832719bf787d1bf736fc64abc464ac879af",
+    "dashboard/seo/legal.js": "ad400214c13ba54ee6d5fa20f49eeec2edf8cf80cc2b651671747817e7df9a41",
+    "dashboard/seo/pricing-page.js": "8840e757dc6f7ae80a5f4c6722075aa2a0d21b2559c9403a6c4b8b7d31b8a8eb",
+    "dashboard/seo/render.js": "53a4b5fe5f3085bcaed467b03ff74b9b2daaac595689829167309bab6b974b22",
+    "dashboard/src/Legal.jsx": "55459b7b7e18fddabaa650aae2009621dc68592a86267db92f963d85aa9a3271",
+    "dashboard/src/components/CookieBanner.jsx": "ce077d3023da90cb7584cbb0e887ce0ccf3c6613fb3dbce06c48ce87b79a0829",
+    "dashboard/src/contexts/AuthContext.jsx": "d7f363557ffe2c5b010c06237d2ee3ef570934b7cfdd5a9bcdb1fedfcf65db49",
+    "dashboard/src/lib/analytics.js": "9dd8086b4ad3f453ed563939ed3d18350c9a497bb0817f0ea0b5b36f56d53c3d",
+    "dashboard/src/lib/attribution.js": "0a215d35362f2650de5a77db85c24a61256080509a08538905aea44d61103f6f",
+    "dashboard/src/lib/consent.js": "f65fed0338673fd16db17d3d3d4cc96f6c417eeea53edb2aca04c71155322f90",
+    "dashboard/src/main.jsx": "39d28911f9e1539eecb87003adf8d875a024b98da8149219e750c73e20138b84",
+    "dashboard/tests/lint-regression.test.mjs": "2c35184ac18e02b3f2df6d2c43ad4d0eee00eaa734b551dac2778aa3c8f80076",
+    "dashboard/tools/common.js": "4fffc690abd95066af12f8245d395e283917fd449a00133a611326aa2732f658",
+    "dashboard/vite-plugin-seo.js": "8af4684e0dbace193c8f8e0a6eac564b46125740489d58ab385f97925bb1e1ab",
+    "docs/architecture/seo-and-tools.md": "5e8b514d74c1070673c7b7944c576d88f9477ad1179f96f68df173fdb482321f",
+    "docs/compliance/retencion.md": "f695ce2946f475d95f7277a734ac8961b672e750a3a506f6b2e5fb2c9f3298c3",
+    "docs/compliance/subprocessors.md": "13161a79c304062985bed66890439af57df85a1f4cd928afc69c34a6e757fa92"
+  },
+  "test_first": {
+    "initial_disabled_analytics": "3 passed, 4 failed",
+    "attribution_and_static_calls_before_fixes": "6 passed, 3 failed",
+    "source": "Builder logs /private/tmp/openshorts-analytics-disabled-before.log and follow-up test transcript"
+  },
+  "independent_checks": [
+    "Nine source-backed Node regression tests passed; lint and production build passed",
+    "Nine policy/loader/callback mutations and one native-dialog UI mutation were caught; restored suite and browser fixtures passed",
+    "Actual Chromium with locally routed synthetic API/storage fixtures: stale grants, blocked storage, auth callback, mobile dialog, generated privacy/Spanish/pricing/transcript pages",
+    "Security review caught six additional in-memory mutations; disabled entrypoints accessed no ambient browser/storage/network state",
+    "All eighteen final source/document hashes match the frozen manifest; session/media modules unchanged, AuthContext executable source unchanged"
+  ],
+  "fixture_boundary": "All browser API responses, stored identities and tool results are synthetic fixtures; no live external service acceptance is claimed.",
+  "local_evidence": {
+    "verifier_directory": "/private/tmp/openshorts-consent-verifier-mchudba_",
+    "verified_manifest_sha256": "8b87f6f6bd23c6c08c6dd400bc2b9d2e156aa61537074f060562d0955d104aed",
+    "builder_browser": "/private/tmp/openshorts-analytics-browser-result.json",
+    "sdk_revocation_proof": "/private/tmp/openshorts-analytics-teardown-proof.mjs",
+    "note": "Local artifacts are not bundled in this commit; independent verdicts also recorded in review conversation."
+  },
+  "not_checked": [
+    "Live provider authentication, analytics, publishing or payouts",
+    "Production deployment or traffic",
+    "Backend analytics or historical data retention",
+    "Already-open older pages, cached releases and service workers",
+    "Full Python suite for this frontend-only delta",
+    "Remote CI success",
+    "Legal compliance; canonical threat-model/SOC 2 registries unavailable"
+  ],
+  "risk": "This change affects newly loaded candidate documents; it cannot retroactively stop older scripts already running in browser tabs."
+}

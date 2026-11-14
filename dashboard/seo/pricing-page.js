@@ -50,7 +50,7 @@ const planRow = (p) => `<tr>
 <td>${money(p.yearly.price)}/month (${money(Math.round(p.yearly.price * 12))}/year)</td>
 <td>${p.monthly.minutes}</td>
 <td>No</td>
-<td><a class="btn-primary" href="/pricing?plan=${slug(p)}" onclick="window.op&amp;&amp;window.op('track','SeoCtaClick',{page:'/pricing',plan:'${slug(p)}'})">Choose ${esc(p.name)}</a>
+<td><a class="btn-primary" href="/pricing?plan=${slug(p)}">Choose ${esc(p.name)}</a>
 <br><a href="/pricing?plan=${slug(p)}&amp;interval=year">or yearly</a></td>
 </tr>`
 
@@ -64,7 +64,7 @@ const table = `
 </tr>
 <tr>
 <td class="os"><strong>Free</strong></td><td>$0</td><td>–</td><td>${FREE.monthly.minutes} (first video up to ${FIRST_VIDEO_MINUTES})</td><td>Yes</td>
-<td><a class="btn-primary" href="${APP}" onclick="window.op&amp;&amp;window.op('track','SeoCtaClick',{page:'/pricing',plan:'free'})">Start free</a></td>
+<td><a class="btn-primary" href="${APP}">Start free</a></td>
 </tr>
 ${PAID.map(planRow).join('\n')}
 </tbody>

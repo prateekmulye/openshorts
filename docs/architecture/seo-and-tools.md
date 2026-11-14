@@ -107,10 +107,10 @@ jump, and every logo on the site must reach the landing.
 
 ## Attribution
 
-`seo/render.js` writes the same first-touch `os_attrib` key the app writes, from
-the static page the visit started on, so signups are credited to the landing page
-and not to `/`. Signup, CheckoutStarted and Subscribed carry
-`landing_path` / `referrer_host` / utm as analytics props (`lib/analytics.js`).
+Optional browser analytics and acquisition attribution are disabled. The SPA
+and static pages do not load OpenPanel, capture first-touch data, or submit
+`os_attrib` at sign-in. Existing consent and attribution storage is left intact
+but is not read or submitted. Backend events are outside this browser change.
 
 The apex→www 301 is done at the reverse-proxy layer, so the nginx redirect never
 sees the apex host.
