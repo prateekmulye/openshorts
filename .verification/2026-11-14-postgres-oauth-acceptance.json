@@ -67,7 +67,8 @@
       "skipped": 24,
       "warnings": 2,
       "exit": 0,
-      "skips": "Twelve opt-in real-DB cases (separately exercised), eleven GPU/NVENC, one GeoIP fixture"
+      "skips": "Twelve opt-in real-DB cases (separately exercised), eleven GPU/NVENC, one GeoIP fixture",
+      "environment": "Isolated Linux arm64 CPU image, provider HTTP fakes, synthetic public-address DNS fixture, networking disabled; model path points to baked weights."
     },
     "dashboard_build": {
       "exit": 0,
@@ -77,7 +78,9 @@
       "exit": 1,
       "errors": 10,
       "baseline_files_unchanged": true,
-      "gate": "Open; separate baseline lint repair required"
+      "gate": "Open; separate baseline lint repair required",
+      "remediation": "Separate baseline lint task; no dashboard changes are bundled in this auth test PR."
     }
-  }
+  },
+  "execution_note": "Default CI skips the opt-in database cases; only the separately executed dedicated PostgreSQL run establishes persistence evidence."
 }
