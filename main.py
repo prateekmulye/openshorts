@@ -2860,12 +2860,14 @@ if __name__ == '__main__':
                 clips_data['source_subtitle_band'] = source_subtitle_band
             for clip in clips_data['shorts']:
                 clip['delivery_validated'] = False
+            source_aspect = output_contract.probe(input_video)["display_aspect"]
+            delivery_min, delivery_max = clip_duration_bounds()
+            clips_data['delivery_contract'] = {
+                'min_seconds': delivery_min, 'max_seconds': delivery_max,
+                'output_format': output_format, 'source_aspect': source_aspect}
             metadata_file = os.path.join(output_dir, f"{video_title}_metadata.json")
             write_json_atomic(metadata_file, clips_data, indent=2)
             print(f"   Saved metadata to {metadata_file}")
-
-            source_aspect = output_contract.probe(input_video)["display_aspect"]
-            delivery_min, delivery_max = clip_duration_bounds()
 
             # 5. Process clips in parallel: each worker cuts + renders one
             # clip. Renders are mostly ffmpeg subprocesses (parallelize well);
@@ -2883,7 +2885,10 @@ if __name__ == '__main__':
 
                 try:
                     # ffmpeg cut — re-encoding for precision on strict seconds
-                    cut_clip(input_video, clip_temp_path, start, end, i + 1)
+                    cut_range = cut_clip(input_video, clip_temp_path, start, end, i + 1)
+                    if cut_range:
+                        clip['rendered_source_range'] = cut_range
+                        start, end = cut_range['start'], cut_range['end']
 
                     # Layer order: the canonical reframe stays CLEAN, the hook
                     # is a derived hooked_ file, captions go last on top of

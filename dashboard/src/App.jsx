@@ -357,7 +357,7 @@ function App() {
   // buries the strongest one wherever it happens to fall in the video — and
   // the first card is the one people actually watch and publish.
   //
-  // The ORIGINAL array position travels with each clip and is what gets passed
+  // The ORIGINAL backend index travels with each clip and is what gets passed
   // down as `index`: it is the clip's identity everywhere else (clip_index on
   // /api/subtitle, /api/edit and publishing, the clip-N.mp4 download name, the
   // saved per-clip project state). Sorting the array itself would silently
@@ -366,7 +366,7 @@ function App() {
     const clips = results?.clips;
     if (!Array.isArray(clips)) return [];
     return clips
-      .map((clip, index) => ({ clip, index }))
+      .map((clip, index) => ({ clip, index: clip.clip_index ?? index }))
       .sort((a, b) => {
         const sa = Number.isFinite(a.clip?.predicted_score) ? a.clip.predicted_score : -1;
         const sb = Number.isFinite(b.clip?.predicted_score) ? b.clip.predicted_score : -1;
@@ -406,6 +406,8 @@ function App() {
   // Clip editor overlay: index of the clip being edited, or null.
   const [editingClip, setEditingClip] = useState(null);
   const [reframingClip, setReframingClip] = useState(null);
+  const editingClipData = rankedClips.find(({ index }) => index === editingClip)?.clip;
+  const reframingClipData = rankedClips.find(({ index }) => index === reframingClip)?.clip;
 
   // Silent-success "saved" states for the settings key inputs (design.md: no alert popups)
   const [elevenLabsSaved, setElevenLabsSaved] = useState(false);
@@ -575,10 +577,11 @@ function App() {
   const handleClipRerendered = (index, data) => {
     const newFile = (data.new_video_url || '').split('/').pop();
     setResults((prev) => {
-      if (!prev?.clips?.[index]) return prev;
+      const position = prev?.clips?.findIndex((clip, i) => (clip.clip_index ?? i) === index) ?? -1;
+      if (position < 0) return prev;
       const clips = prev.clips.slice();
-      clips[index] = {
-        ...clips[index],
+      clips[position] = {
+        ...clips[position],
         video_url: data.new_video_url,
         start: data.start,
         end: data.end,
@@ -638,7 +641,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             job_id: jobId,
-            clip_index: i,
+            clip_index: clips[i].clip_index ?? i,
             position: options.position,
             font_size: options.fontSize,
             font_name: options.fontName,
@@ -2703,20 +2706,20 @@ function App() {
       )}
 
 
-      {editingClip !== null && results?.clips?.[editingClip] && (
+      {editingClip !== null && editingClipData && (
         <ClipEditor
           jobId={jobId}
           clipIndex={editingClip}
-          clipTitle={results.clips[editingClip].video_title_for_youtube_short || ''}
+          clipTitle={editingClipData.video_title_for_youtube_short || ''}
           onClose={() => setEditingClip(null)}
           onRerendered={handleClipRerendered}
         />
       )}
-      {reframingClip !== null && results?.clips?.[reframingClip] && (
+      {reframingClip !== null && reframingClipData && (
         <ReframeEditor
           jobId={jobId}
           clipIndex={reframingClip}
-          clipTitle={results.clips[reframingClip].video_title_for_youtube_short || ''}
+          clipTitle={reframingClipData.video_title_for_youtube_short || ''}
           onClose={() => setReframingClip(null)}
           onReframed={handleClipRerendered}
         />

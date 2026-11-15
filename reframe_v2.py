@@ -513,7 +513,7 @@ def _analyze_trajectory(input_video, scenes_boundaries, scene_strategies,
             ["ffmpeg", "-loglevel", "error", *gpu_decode.input_args(on_gpu),
              "-i", input_video,
              "-vf", gpu_decode.vf(f"scale={small_w}:{small_h}", on_gpu),
-             "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+             "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=frame_bytes * 4)
         try:
             xs = _trajectory_loop(
@@ -540,18 +540,25 @@ def _run(cmd):
                    stderr=subprocess.PIPE, timeout=1800)
 
 
-def _run_segment(input_video, ss, dur, extra_inputs, graph, out_label, seg_path):
+def _run_segment(input_video, ss, dur, extra_inputs, graph, out_label, seg_path, fps):
     """Encode one scene. The clip is decoded on the card when it can
     (gpu_decode: the same frames, so the same segment) and on the CPU if that
     ffmpeg fails."""
+    from fractions import Fraction
+    source_rate = str(Fraction(fps).limit_denominator(1000000))
+    start_frame = round(ss * fps)
+    end_frame = start_frame + round(dur * fps)
+    # ponytail: decode from clip start for exact frame selection; optimize
+    # seeks only with a verified source-frame mapping.
+    graph = (f"[0:v]trim=start_frame={start_frame}:end_frame={end_frame},"
+             "setpts=PTS-STARTPTS[scene];" + graph.replace("[0:v]", "[scene]"))
     def build(on_gpu):
         on_gpu = on_gpu and gpu_decode.graph_ok(graph)
         return [
             "ffmpeg", "-y", "-loglevel", "error",
-            "-ss", f"{ss:.4f}", "-t", f"{dur:.4f}",
             *gpu_decode.input_args(on_gpu), "-i", input_video, *extra_inputs,
             "-filter_complex", gpu_decode.graph(graph, on_gpu), "-map", out_label,
-            *video_encode_args(QUALITY_FAST), "-an", seg_path,
+            *video_encode_args(QUALITY_FAST), "-r", source_rate, "-fps_mode", "cfr", "-an", seg_path,
         ]
 
     def runner(cmd):
@@ -615,7 +622,7 @@ def encode_scenes(input_video, specs, orig_w, orig_h, out_w, out_h, fps,
                 extra = ["-i", logo]
                 graph += ";" + m.watermark_filter(out_w, out_h, video="[v]", out="[vw]")
                 out_label = "[vw]"
-            _run_segment(input_video, ss, dur, extra, graph, out_label, seg_path)
+            _run_segment(input_video, ss, dur, extra, graph, out_label, seg_path, fps)
             segments.append(seg_path)
 
         list_path = os.path.join(workdir, "concat.txt")

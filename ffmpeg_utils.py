@@ -343,6 +343,32 @@ def _gpu_cut_ok(input_video):
     return _gpu_cut_sources[input_video]
 
 
+def _fractional_frame_cut(input_video, start, end):
+    """Inward whole-frame bounds for fractional CFR; other inputs keep their path."""
+    if not os.path.isfile(input_video):
+        return None
+    import json
+    import math
+    from fractions import Fraction
+    try:
+        data = json.loads(subprocess.check_output([
+            'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_entries', 'stream=avg_frame_rate,r_frame_rate,start_time',
+            '-of', 'json', input_video], stderr=subprocess.DEVNULL, timeout=30))
+        stream = data['streams'][0]
+        fps = Fraction(stream['avg_frame_rate'])
+        if fps <= 0 or fps.denominator == 1 or fps != Fraction(stream['r_frame_rate']):
+            return None
+        origin = Fraction(stream.get('start_time') or '0')
+        first = math.ceil((Fraction(str(start)) - origin) * fps)
+        stop = math.floor((Fraction(str(end)) - origin) * fps)
+        if stop <= first:
+            raise ValueError('Clip range contains no complete source frame')
+        return float(origin + first / fps), float(origin + stop / fps), stop - first, str(fps)
+    except (OSError, subprocess.SubprocessError, KeyError, IndexError, ZeroDivisionError):
+        return None
+
+
 def cut_clip(input_video, clip_temp_path, start, end, clip_number):
     """Cut [start, end] out of the source into ``clip_temp_path``.
 
@@ -362,13 +388,20 @@ def cut_clip(input_video, clip_temp_path, start, end, clip_number):
     session cannot allocate on a GPU that other jobs are filling.
     """
     encode_args = video_encode_args(INTERMEDIATE)
+    timing = _fractional_frame_cut(input_video, start, end)
+    output_timing = []
+    if timing:
+        start, end, frame_count, source_rate = timing
+        # Bound loudnorm's flushed audio too; input -to alone does not do it.
+        output_timing = ['-vf', f'trim=end_frame={frame_count},setpts=PTS-STARTPTS',
+                         '-r', source_rate, '-fps_mode', 'cfr', '-t', f'{end - start:.9f}']
     command = [
         'ffmpeg', '-y',
         '-ss', str(start),
         '-to', str(end),
         '-i', input_video,
         *encode_args,
-        *audio_encode_args(),
+        *audio_encode_args(), *output_timing,
         clip_temp_path
     ]
     gpu_command = None
@@ -381,7 +414,7 @@ def cut_clip(input_video, clip_temp_path, start, end, clip_number):
             del gpu_args[i:i + 2]
         gpu_command = ['ffmpeg', '-y', '-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda',
                        '-ss', str(start), '-to', str(end), '-i', input_video,
-                       *gpu_args, *audio_encode_args(), clip_temp_path]
+                       *gpu_args, *audio_encode_args(), *output_timing, clip_temp_path]
 
     def _run_one(cmd):
         result = subprocess.run(cmd, stdout=subprocess.DEVNULL,
@@ -409,7 +442,7 @@ def cut_clip(input_video, clip_temp_path, start, end, clip_number):
         if ok:
             if attempt > 1:
                 print(f"   ✅ Clip {clip_number} cut on attempt {attempt}.")
-            return
+            return {'start': start, 'end': end, 'expected_frames': frame_count} if timing else None
         if wait is None:
             break
         print(f"   ⚠️ Cut of clip {clip_number} failed ({report}) — "

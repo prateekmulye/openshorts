@@ -25,7 +25,7 @@ import time
 import uuid
 
 from ffmpeg_utils import (METADATA_SCRUB, QUALITY_FAST, audio_encode_args,
-                          video_encode_args)
+                          video_encode_args, _fractional_frame_cut)
 
 # EDL limits. Deliberately generous — the editor is for humans fixing cuts,
 # not for stitching feature films.
@@ -185,13 +185,20 @@ def cut_commands(input_path, segments, part_paths):
     with uniform parameters so the parts concat cleanly."""
     commands = []
     for seg, part in zip(segments, part_paths):
+        start, end = seg['start'], seg['end']
+        timing = _fractional_frame_cut(input_path, start, end)
+        output_timing = []
+        if timing:
+            start, end, frames, rate = timing
+            output_timing = ['-vf', f'trim=end_frame={frames},setpts=PTS-STARTPTS',
+                             '-r', rate, '-fps_mode', 'cfr', '-t', f'{end-start:.9f}']
         commands.append([
             "ffmpeg", "-y",
-            "-ss", str(seg["start"]),
-            "-to", str(seg["end"]),
+            "-ss", str(start),
+            "-to", str(end),
             "-i", input_path,
             *video_encode_args(QUALITY_FAST),
-            *audio_encode_args(),
+            *audio_encode_args(), *output_timing,
             # Every final-artifact producer in the repo scrubs source metadata
             # and fronts the moov atom (a fast-path recut IS the delivered
             # file, and without +faststart the browser preview hangs). Also on
