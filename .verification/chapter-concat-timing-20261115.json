@@ -1,0 +1,48 @@
+{
+  "verdict": "PASS",
+  "meaning": "I could not break this frozen scoped delta; not correctness proof, live-delivery or paid acceptance.",
+  "reviewer": "independent paid_pipeline_verifier agent; separate producing context",
+  "created_at": "2026-11-15T12:52:08.861589+00:00",
+  "repository": "/private/tmp/openshorts-paid-readiness",
+  "base_commit": "138c1821ed734141c5b92a8e915ee36c7b8fcd0d",
+  "scope": "Intermediate scene metadata/chapter scrub before concat; exactly2listedfiles.",
+  "verified": {
+    "reframe_v2.py": "ec0ba626cc9ed340ddbeaab5e8bf87885c889ad2",
+    "tests/test_frame_timing.py": "6d85878bab0ef751654602feb76e6957dbc64a94"
+  },
+  "sha256": {
+    "reframe_v2.py": "1b5545cb8dc29611c291e2ea83a5978d368cae761bfc350934925293da296a06",
+    "tests/test_frame_timing.py": "d37fde3636cb84fc4c77ac6eb9cc56e4ec55b7973382c3cace1136c5d0855d49"
+  },
+  "independent_commands": [
+    {
+      "result": "2246passed,12skipped,8warnings in44.21s",
+      "exit_code": 0,
+      "log": "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-full-suite.log"
+    },
+    {
+      "result": "8baselinepassed;1mutantfailed/7passed;8restoredpassed",
+      "logs": [
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-baseline.log",
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-mutant.log",
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-restored.log"
+      ]
+    }
+  ],
+  "mutation_evidence": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-mutant.log"
+  ],
+  "final_tested_mutation_survivors": [],
+  "reports": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-delta-review.md",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-actual-independent.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-normal-pipeline-independent-probe.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/pts-v5-source-inventory.json"
+  ],
+  "limitations": [
+    "V4failedartifacts remain failed; new live runtime outputs pending.",
+    "12hardware/data-dependent skips; no GPU equivalence.",
+    "Actual renderer independently repeated with observedscene split; normal-main diagnostic independently measured, not scene detector re-executed.",
+    "No human semantics/browser/production/publication/payment or paid acceptance."
+  ]
+}

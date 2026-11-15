@@ -124,3 +124,37 @@ def test_integer_cfr_cut_has_aligned_audio_and_video_budget(tmp_path,monkeypatch
     assert int(v['nb_frames']) == frames
     assert float(v['duration']) == pytest.approx(duration,abs=0.000001)
     assert abs(float(a['duration'])-duration) <= 0.001
+
+
+def test_chapter_bearing_scene_join_has_contiguous_frame_timestamps(tmp_path,monkeypatch):
+    """A source chapter must not determine the concat offset of a shorter scene.
+
+    The v4 failure retained all frames but inherited a chapter/data track
+    ending at the full cut duration, extending the first scene's container.
+    """
+    monkeypatch.setenv('FFMPEG_ENCODER','x264')
+    monkeypatch.setattr(reframe_v2.gpu_render,'ENABLED',False)
+    monkeypatch.setattr(reframe_v2.gpu_decode,'ENABLED',False)
+    raw=tmp_path/'raw.mp4';source=tmp_path/'source.mp4';output=tmp_path/'rendered.mp4'
+    fixture_video(raw,audio=True,rate='24')
+    chapters=tmp_path/'chapters.txt'
+    chapters.write_text(';FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=4500\ntitle=Fixture chapter\n')
+    subprocess.run(['ffmpeg','-v','error','-y','-i',str(raw),'-i',str(chapters),
+        '-map','0','-map_metadata','1','-map_chapters','1','-c','copy',str(source)],check=True)
+    graph=reframe_v2.general_filtergraph(96,160,orig_w=96,orig_h=54)
+    specs=[(0,86/24,graph,None),(86/24,22/24,graph,None)]
+    reframe_v2.encode_scenes(str(source),specs,96,54,96,160,24,str(tmp_path),None,str(output))
+    frames=json.loads(subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0',
+        '-show_frames','-show_entries','frame=best_effort_timestamp_time','-of','json',str(output)]))['frames']
+    times=[float(f['best_effort_timestamp_time']) for f in frames]
+    assert len(times) == 108
+    assert max(abs((b-a)-1/24) for a,b in zip(times,times[1:])) < 0.000002
+    assert times[-1] == pytest.approx(107/24,abs=0.000001)
+    streams=probe(output)
+    assert float(streams['video']['duration']) == 4.5
+    assert float(streams['audio']['duration']) == 4.5
+    segment=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_chapters',
+        '-show_format','-show_streams','-of','json',str(tmp_path/'seg_000.mp4')]))
+    assert segment['chapters'] == []
+    assert [s['codec_type'] for s in segment['streams']] == ['video']
+    assert float(segment['format']['duration']) == pytest.approx(86/24,abs=0.000001)

@@ -558,7 +558,10 @@ def _run_segment(input_video, ss, dur, extra_inputs, graph, out_label, seg_path,
             "ffmpeg", "-y", "-loglevel", "error",
             *gpu_decode.input_args(on_gpu), "-i", input_video, *extra_inputs,
             "-filter_complex", gpu_decode.graph(graph, on_gpu), "-map", out_label,
-            *video_encode_args(QUALITY_FAST), "-r", source_rate, "-fps_mode", "cfr", "-an", seg_path,
+            *video_encode_args(QUALITY_FAST), "-r", source_rate, "-fps_mode", "cfr", "-an",
+            # Inherited chapters can outlast this scene and shift the next
+            # concat timestamp even when the video frame count is correct.
+            *METADATA_SCRUB, seg_path,
         ]
 
     def runner(cmd):
