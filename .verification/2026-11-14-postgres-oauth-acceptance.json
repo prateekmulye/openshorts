@@ -1,0 +1,86 @@
+{
+  "verdict": "PASS",
+  "reviewer": "/root/postgres_auth_verifier",
+  "context": "Independent fresh-context review; PASS means no scoped defect found. Provider HTTP faked; persistence real.",
+  "date": "2026-11-14",
+  "base": "e0239e6cfdd8c6d306934b3134d74ed8abcabafe",
+  "verified": {
+    "tests/test_postgres_oauth_acceptance.py": "8355d8058c7dbb4b7cb5abb7db555339b16d1879"
+  },
+  "evidence": {
+    "new_acceptance_file": {
+      "passed": 19,
+      "source": "Independent review transcript session 78873, completion chunk 23caf7",
+      "scope": "Seven database-target validation cases and twelve actual PostgreSQL/schema/session cases"
+    },
+    "related_suite": {
+      "passed": 68,
+      "skipped": 2,
+      "warnings": 4,
+      "source": "Independent review transcript session 91519, completion chunk 1637cc",
+      "skips": "Billing evidence cases require missing Stripe module",
+      "warning_summary": "Existing datetime.utcnow usage"
+    },
+    "database_identity": "Independent database query confirmed dedicated test role/database and citext email type",
+    "provider_boundary": "Provider HTTP MockTransport; actual auth routers, SessionMiddleware, crypto and PostgreSQL. In-process ASGI requests.",
+    "retained_output": "Independent command output retained in conversation, not standalone log files."
+  },
+  "mutations": [
+    {
+      "target": "cloud/auth.py verifier comparison",
+      "change": "Disable verifier comparison",
+      "detected": "Wrong verifier returned 200 instead of 400"
+    },
+    {
+      "target": "cloud/auth.py login-code row lock",
+      "change": "Remove with_for_update",
+      "detected": "Concurrent exchanges both returned 200"
+    },
+    {
+      "target": "cloud/evidence.py evidence insertion",
+      "change": "Skip EvidenceEvent insertion",
+      "detected": "Persisted evidence query raised NoResultFound"
+    },
+    {
+      "target": "cloud/oauth.py strict audience validator",
+      "change": "Accept every audience",
+      "detected": "Extra audience received login code instead of OAuth error"
+    }
+  ],
+  "restored_baseline": {
+    "passed": 19,
+    "source": "Independent review transcript session 46528, completion chunk aeaf4f"
+  },
+  "not_checked": [
+    "Live Google/provider authentication",
+    "Actual browser cookie enforcement",
+    "Full deployed application startup and production sessions",
+    "External egress independently monitored",
+    "Full repository suite in this independent auth gate",
+    "Billing cases requiring unavailable Stripe module",
+    "Concurrency beyond exercised requests"
+  ],
+  "additional_local_checks": {
+    "source": "Builder exact-candidate isolated snapshot; not independent full-suite rerun",
+    "pytest": {
+      "passed": 2107,
+      "skipped": 24,
+      "warnings": 2,
+      "exit": 0,
+      "skips": "Twelve opt-in real-DB cases (separately exercised), eleven GPU/NVENC, one GeoIP fixture",
+      "environment": "Isolated Linux arm64 CPU image, provider HTTP fakes, synthetic public-address DNS fixture, networking disabled; model path points to baked weights."
+    },
+    "dashboard_build": {
+      "exit": 0,
+      "warning": "Existing large chunk"
+    },
+    "dashboard_lint": {
+      "exit": 1,
+      "errors": 10,
+      "baseline_files_unchanged": true,
+      "gate": "Open; separate baseline lint repair required",
+      "remediation": "Separate baseline lint task; no dashboard changes are bundled in this auth test PR."
+    }
+  },
+  "execution_note": "Default CI skips the opt-in database cases; only the separately executed dedicated PostgreSQL run establishes persistence evidence."
+}
