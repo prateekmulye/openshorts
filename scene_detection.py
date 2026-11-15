@@ -112,7 +112,6 @@ def _detect_transnetv2(video_path):
 
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
     frames = _extract_frames_small(video_path)
@@ -129,15 +128,12 @@ def _detect_transnetv2(video_path):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    # predictions_to_scenes returns [[start, end], ...] with INCLUSIVE ends;
-    # downstream expects PySceneDetect's exclusive ends.
+    # TransNet omits transition frames between its inclusive scene ranges.
+    # Keep detected shot starts, but partition every decoded frame so scene
+    # concatenation cannot shorten the picture while audio stays continuous.
     raw = model.predictions_to_scenes(single_frame_pred.numpy(), threshold=threshold)
-    bounds = [(int(s), int(e) + 1) for s, e in raw]
-
-    # cv2's frame count can differ by a few frames from what ffmpeg decodes;
-    # downstream loops run to the decoder's count, so cover the gap.
-    if total_frames > bounds[-1][1]:
-        bounds[-1] = (bounds[-1][0], total_frames)
+    starts = [0] + [int(s) for s, _ in raw[1:]]
+    bounds = list(zip(starts, starts[1:] + [len(frames)]))
 
     min_sec = float(os.environ.get("SCENE_MIN_SEC", "0.4"))
     bounds = _merge_short_scenes(bounds, fps, min_sec)
