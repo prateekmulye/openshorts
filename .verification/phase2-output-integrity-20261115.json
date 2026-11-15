@@ -1,0 +1,74 @@
+{
+  "verdict": "PASS",
+  "meaning": "I could not break the frozen scoped delta; not correctness proof, paid acceptance or deployment approval.",
+  "reviewer": "independent paid_pipeline_verifier agent; separate producing context",
+  "created_at": "2026-11-15T11:54:25.149452+00:00",
+  "repository": "/private/tmp/openshorts-paid-readiness",
+  "base_commit": "3f97e5ec1033e492c96e27d089f03b8ae30b20f2",
+  "scope": "Timing, rejected-delivery recovery, stable identity, guarded rerender/reframe, UI identity callbacks; exactly14listed files.",
+  "verified": {
+    "app.py": "da00a5f56a2fa1ac993dff948e61e2b7c731da06",
+    "main.py": "77a03ac75a739a95b1c22b3e390dcdb8c38e4d15",
+    "ffmpeg_utils.py": "9f2ef24528db0b27dea0978a22c2fdc2457a11d1",
+    "reframe_v2.py": "f4fbab3b2d5de44cae68232f9032bfaeb5b64f6b",
+    "recut.py": "1115714e3982876db4c4c2181bb09d9e146e3e5a",
+    "cloud/videos.py": "fcbf99057365d9e689ce4f21f325ea181bf93faf",
+    "tests/test_frame_timing.py": "5981054f43286439b591e9949c3307cb0dd9786e",
+    "tests/test_recovered_delivery_contract.py": "73edc474495b0f318b5ef70e2a5611db33aca848",
+    "tests/test_recut_delivery_contract.py": "224e8890f49189f54c093de0294342d56b38e7f7",
+    "tests/test_archive_clip_identity.py": "6990e702daba57a2e9a0479fecdf3e2b3dbda564",
+    "tests/test_deploy_drain.py": "9ca2471aded2c01d3208c2f9aa089841de25b3f1",
+    "dashboard/src/App.jsx": "9edd41004d40cd36d81ba18de60afc88519abf8b",
+    "dashboard/src/components/ScheduleWeekModal.jsx": "b9781becb17175a68e40d8a8dcca726b9ef1271f",
+    "dashboard/tests/clipIdentity.test.mjs": "d025f434071fcb1ef8c0e38d544588c07fe9b5e3"
+  },
+  "sha256": {
+    "app.py": "cb3c7252575313ca2004191b342f7f78ac634abc1348ef1946099f60f58e002a",
+    "main.py": "4fd2ee96396d3e2773cd3bba018b258e8f32e673710bb0a0e411bfb40d4098b9",
+    "ffmpeg_utils.py": "7f6e8fd46ae68f8de2e6562ecceb0ee14ef69544c5a45fa6db6065b39181606b",
+    "reframe_v2.py": "f4de2b0fffe73f713271ed0301f412231af310ca07f0dc160bb9e9876031fada",
+    "recut.py": "ef88634bbc3d35485f1f08d6235ea732b213f062b8d1a2538ab2477f872e067b",
+    "cloud/videos.py": "aee5d22e3fd08bc26adc7f6700024f101abb10a871ea1d7b50ddf102f011ed31",
+    "tests/test_frame_timing.py": "5cf18295d0df1623fd21f906d1508b4f90468f0bf06be9e528438bd480cb740d",
+    "tests/test_recovered_delivery_contract.py": "bd202e44bbc16276dc4b7d4e8fe915cd140ff3390743e9970bd61330d1ded711",
+    "tests/test_recut_delivery_contract.py": "c1985818d704851c57cf250d2ac464c032e94b590307ce5e6b97d2a9362cc168",
+    "tests/test_archive_clip_identity.py": "3bd4c26339f42cfc5421dbdb4a024de06ecf86e12258938213754978be665e72",
+    "tests/test_deploy_drain.py": "1965f63a10a337cd052ad5594a6d474f55d6d6287e7cb1fb8c72ea549b886497",
+    "dashboard/src/App.jsx": "c0c15791679b7cd05cc1e6cf7c7bf6cb4fa2180a64fbf83a98e77e50b0cbbc8b",
+    "dashboard/src/components/ScheduleWeekModal.jsx": "01b93cb8244c911eae2e473e1c9f7ebd65870e9a6a70634b2fbae91a0ff9e899",
+    "dashboard/tests/clipIdentity.test.mjs": "d9b1ba949b911aab27d2893fbc6d0e8d47e7f9bc1b66d08376640b269300f636"
+  },
+  "independent_commands": [
+    {
+      "result": "2241 passed,12 skipped,8 warnings in44.25s",
+      "exit_code": 0,
+      "log": "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-combined-final-full.log",
+      "scope": "final combined runtime source plus unchanged original I/O overlays; all current tests"
+    },
+    {
+      "result": "UI8passed; Vite build exit0 with envFile:false",
+      "evidence": "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-ui/summary.json"
+    }
+  ],
+  "mutation_evidence": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-engine-mutations/summary.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-reframe-final-mutant.log",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-ui/summary.json"
+  ],
+  "final_tested_mutation_survivors": [],
+  "reports": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-final-review.md",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-runtime-overlay-check.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-recovery-result.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-index-result.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-actual-clip1-probes.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/phase2-actual-clip2-probes.json"
+  ],
+  "limitations": [
+    "12 hardware/data-dependent skips; no GPU equivalence claim.",
+    "Prior concurrent verifier render exit137 is a resource-cap inconclusive attempt; serial retry passed. No capacity claim.",
+    "No browser, hosted auth, live cloud archive, production, publication or payment acceptance.",
+    "No human semantic/audio/caption/editorial approval.",
+    "New runtime/replay/campaign artifacts require separate live inspection."
+  ]
+}

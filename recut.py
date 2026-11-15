@@ -25,7 +25,7 @@ import time
 import uuid
 
 from ffmpeg_utils import (METADATA_SCRUB, QUALITY_FAST, audio_encode_args,
-                          video_encode_args)
+                          video_encode_args, _cfr_frame_cut)
 
 # EDL limits. Deliberately generous — the editor is for humans fixing cuts,
 # not for stitching feature films.
@@ -109,18 +109,18 @@ def rebase_segments(segments, range_start, range_end=None):
 def snap_segments(segments, transcript, source_duration):
     """Snap each segment's bounds onto word boundaries (ground truth beats
     millisecond arithmetic — same rationale as the pipeline's snapping)."""
-    from clip_selection import snap_clip_to_words
+    from clip_selection import snap_clip_to_words, valid_clip_bounds
 
     words = transcript_words(transcript)
-    if not words:
-        return segments
     snapped = []
     for seg in segments:
         start, end = snap_clip_to_words(
             seg["start"], seg["end"], words, source_duration,
             min_duration=MIN_SEGMENT_SECONDS, max_duration=MAX_TOTAL_SECONDS)
+        if not valid_clip_bounds(start, end, source_duration, MIN_SEGMENT_SECONDS, MAX_TOTAL_SECONDS):
+            raise RecutError("Snapped segment is outside the source or duration bounds")
         snapped.append({"start": start, "end": end})
-    return snapped
+    return snapped if words else segments
 
 
 def transcript_words(transcript):
@@ -185,13 +185,20 @@ def cut_commands(input_path, segments, part_paths):
     with uniform parameters so the parts concat cleanly."""
     commands = []
     for seg, part in zip(segments, part_paths):
+        start, end = seg['start'], seg['end']
+        timing = _cfr_frame_cut(input_path, start, end)
+        output_timing = []
+        if timing:
+            start, end, frames, rate = timing
+            output_timing = ['-vf', f'trim=end_frame={frames},setpts=PTS-STARTPTS',
+                             '-r', rate, '-fps_mode', 'cfr', '-t', f'{end-start:.9f}']
         commands.append([
             "ffmpeg", "-y",
-            "-ss", str(seg["start"]),
-            "-to", str(seg["end"]),
+            "-ss", str(start),
+            "-to", str(end),
             "-i", input_path,
             *video_encode_args(QUALITY_FAST),
-            *audio_encode_args(),
+            *audio_encode_args(), *output_timing,
             # Every final-artifact producer in the repo scrubs source metadata
             # and fronts the moov atom (a fast-path recut IS the delivered
             # file, and without +faststart the browser preview hangs). Also on

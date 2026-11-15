@@ -1,0 +1,49 @@
+{
+  "verdict": "PASS",
+  "meaning": "I could not break this scoped frozen delta; not correctness proof, live output acceptance or paid readiness.",
+  "reviewer": "independent paid_pipeline_verifier agent; separate producing context",
+  "created_at": "2026-11-15T12:21:04.650740+00:00",
+  "repository": "/private/tmp/openshorts-paid-readiness",
+  "base_commit": "a27dfa2e7bcdffe4ef139d6dad34fa4fd8d374d8",
+  "scope": "Only integer-CFR frame/audio budget extension and private helper rename; three listed files.",
+  "verified": {
+    "ffmpeg_utils.py": "aa3ee71abcf34fef2406c313e46b03d156011406",
+    "recut.py": "9a626134a1b610e8ddb90d4fe657b8d54dd2d549",
+    "tests/test_frame_timing.py": "15e610f20364bf3eab9e287481c34d97ccd1b401"
+  },
+  "sha256": {
+    "ffmpeg_utils.py": "a966bb64393eb8a795620ac12cd71ca80da68a6f05b9e0b665da916c49e4221a",
+    "recut.py": "2bf2c2583d4d28a6791e5cf57e6ba7c364cac0c817d953a8a085d7e75d07d6eb",
+    "tests/test_frame_timing.py": "80b74ca1b27995a0b97d1bd17c9ab75ec6b9e95470fcffa72375e9e0372b7962"
+  },
+  "independent_commands": [
+    {
+      "result": "2245 passed,12 skipped,8 warnings in44.46s",
+      "exit_code": 0,
+      "log": "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-full-suite.log"
+    },
+    {
+      "result": "7 baseline passed;4 mutant failures/3passed;7 restored passed",
+      "logs": [
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-targeted.log",
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-mutant.log",
+        "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-restored.log"
+      ]
+    }
+  ],
+  "mutation_evidence": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-mutant.log"
+  ],
+  "final_tested_mutation_survivors": [],
+  "reports": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-delta-review.md",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-actual-cut-probes.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/audio-v4-four-case-independent-probes.json"
+  ],
+  "limitations": [
+    "No new live engine job or branded outputs; v3 failed artifacts remain failed.",
+    "12 hardware/data-dependent skips; no GPU equivalence claim.",
+    "Inward rounding can truthfully reduce delivered count; no acceptance-bound expansion.",
+    "No human semantics, browser, production, publication/payment or paid acceptance."
+  ]
+}

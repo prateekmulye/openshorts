@@ -201,7 +201,8 @@ async def archive_job(user_id, job_id, clips, output_dir, attestation=None):
     base_name = (os.path.basename(meta_files[0]).replace("_metadata.json", "")
                  if meta_files else None)
     uploaded = []  # (clip_index, filename, key, title, size_bytes)
-    for i, clip in enumerate(clips):
+    for position, clip in enumerate(clips):
+        i = clip.get('clip_index', position)
         video_url = clip.get("video_url") or ""
         filename = video_url.split("/")[-1]
         if not filename:

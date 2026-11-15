@@ -1,5 +1,6 @@
 import os
 import llm_backend
+import output_contract
 import re
 import sys
 import uuid
@@ -1507,6 +1508,15 @@ def _canonical_clip_file(output_dir, base_name, index):
     return os.path.basename(max(derived, key=os.path.getmtime))
 
 
+def _result_clip(job, clip_index):
+    """Resolve original metadata identity, never a filtered result position."""
+    clips = ((job or {}).get('result') or {}).get('clips') or []
+    for position, clip in enumerate(clips):
+        if clip.get('clip_index', position) == clip_index:
+            return clip
+    return None
+
+
 def _clips_actually_rendered(job_id, output_dir, base_name, clips):
     """Keep only the clips whose file is really on disk. Returns (kept, missing).
 
@@ -1535,7 +1545,10 @@ def _clips_actually_rendered(job_id, output_dir, base_name, clips):
     ready_files = (jobs.get(job_id) or {}).get('ready_files') or {}
     kept = []
     for i, clip in enumerate(clips):
-        clip_filename = (ready_files.get(i)
+        if clip.get('delivery_validated') is False:
+            continue
+        clip_filename = (os.path.basename(clip['video_url']) if clip.get('video_url') else
+                         ready_files.get(i)
                          or _canonical_clip_file(output_dir, base_name, i))
         clip_path = os.path.join(output_dir, clip_filename)
         try:
@@ -1546,6 +1559,7 @@ def _clips_actually_rendered(job_id, output_dir, base_name, clips):
             print(f"⚠️  Clip {i + 1} of {job_id} never rendered "
                   f"({clip_filename}) — dropping it from the result.")
             continue
+        clip['clip_index'] = i
         clip['video_url'] = f"/videos/{job_id}/{clip_filename}"
         kept.append(clip)
     return kept, len(clips) - len(kept)
@@ -1652,9 +1666,9 @@ def _unmark_local_job(job_id, clip_index, clean_filename):
     job_dir = os.path.join(OUTPUT_DIR, job_id)
     url = f"/videos/{job_id}/{clean_filename}"
     job = jobs.get(job_id)
-    mem_clips = ((job or {}).get('result') or {}).get('clips') or []
-    if clip_index < len(mem_clips):
-        mem_clips[clip_index]['video_url'] = url
+    mem_clip = _result_clip(job, clip_index)
+    if mem_clip is not None:
+        mem_clip['video_url'] = url
     ready = (job or {}).get('ready_files')
     if isinstance(ready, dict) and clip_index in ready:
         ready[clip_index] = clean_filename
@@ -1816,6 +1830,28 @@ def _restyle_captions(video_path, transcript, start, end, style,
         return None
 
 
+def _validate_recut_delivery(data, output_dir, served_name, clean_name):
+    contract = data.get('delivery_contract')
+    if not contract:
+        return {}  # Legacy edits do not gain a strict-validation claim.
+    try:
+        measured = output_contract.validate_delivery(
+            os.path.join(output_dir, served_name), contract['min_seconds'],
+            contract['max_seconds'], contract['output_format'], contract['source_aspect'])
+    except Exception:
+        # Preserve failed renders away from canonical-file discovery on restart.
+        rejected = os.path.join(output_dir, 'rejected')
+        os.makedirs(rejected, exist_ok=True)
+        # The unique recut name also identifies its captioned/marked twins.
+        paths = set(glob.glob(os.path.join(output_dir, '*' + clean_name)))
+        paths.add(os.path.join(output_dir, served_name))
+        for path in paths:
+            if os.path.isfile(path):
+                os.replace(path, os.path.join(rejected, os.path.basename(path)))
+        raise
+    return {'delivery_validated': True, 'delivery_probe': measured}
+
+
 def _recut_captioner(clip):
     """perform_recut's ``captioner`` for a clip whose captions were styled
     in the modal, or None for the default look. Edited words are not carried:
@@ -1852,15 +1888,7 @@ def _recover_jobs_from_disk():
         if not json_files:
             continue
         try:
-            with open(json_files[0], 'r') as f:
-                data = json.load(f)
-            base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
-            clips = data.get('shorts', [])
-            for i, clip in enumerate(clips):
-                if not clip.get('video_url'):
-                    clip['video_url'] = (
-                        f"/videos/{job_id}/"
-                        f"{_canonical_clip_file(job_path, base_name, i)}")
+            result = _result_from_disk(job_id, job_path)
             owner = None
             owner_path = os.path.join(job_path, ".owner")
             if os.path.exists(owner_path):
@@ -1868,11 +1896,11 @@ def _recover_jobs_from_disk():
                     raw = f.read().strip()
                 owner = int(raw) if raw.isdigit() else (raw or None)
             jobs[job_id] = {
-                'status': 'completed',
+                'status': 'completed' if result else 'failed',
                 'logs': _TimedLog(["♻️ Job recovered from disk after server restart."]),
                 'output_dir': job_path,
                 'user_id': owner,
-                'result': {'clips': clips, 'cost_analysis': data.get('cost_analysis')},
+                'result': result,
             }
             recovered += 1
         except Exception as e:
@@ -3317,6 +3345,14 @@ async def _deliver_job(job_id, job):
         _delivering_jobs.discard(job_id)
 
 
+def _delivered_contract(data, delivered_count):
+    contract = data.get('output_contract')
+    if not contract:
+        return None
+    return output_contract.outcome(contract['requested_min'], contract['requested_max'],
+                                   contract['selected_count'], delivered_count)
+
+
 def _result_from_disk(job_id, output_dir):
     """The result of a job whose main.py exited 0, rebuilt from its dir (the
     clips main.py announced, or the canonical files). None: nothing rendered."""
@@ -3330,7 +3366,8 @@ def _result_from_disk(job_id, output_dir):
         job_id, output_dir, base_name, data.get('shorts', []))
     if not rendered:
         return None
-    return {'clips': rendered, 'cost_analysis': data.get('cost_analysis')}
+    return {'clips': rendered, 'cost_analysis': data.get('cost_analysis'),
+            'output_contract': _delivered_contract(data, len(rendered))}
 
 
 def _resume_delivery_record(job_id, job, m):
@@ -3733,7 +3770,7 @@ async def _webhook_clip_entries(job_id, job):
     for i, clip in enumerate(clips):
         rel = clip.get('video_url') or ""
         entries.append({
-            "index": i,
+            "index": clip.get('clip_index', i),
             "title": clip.get('title') or clip.get('video_title_for_youtube_short'),
             # Signed: a webhook consumer has no session to show /videos.
             "video_url": _signed_media_url(rel, base) if rel.startswith("/") else rel,
@@ -3749,8 +3786,9 @@ async def _webhook_clip_entries(job_id, job):
                     _select(UserVideo).where(UserVideo.job_id == job_id)
                 )).scalars())
             for v in vids:
-                if v.clip_index is not None and v.clip_index < len(entries):
-                    entries[v.clip_index]["download_url"] = _storage.presigned_get(
+                entry = next((e for e in entries if e['index'] == v.clip_index), None)
+                if entry is not None:
+                    entry["download_url"] = _storage.presigned_get(
                         v.r2_key, expires=24 * 3600)
         except Exception as e:
             print(f"⚠️ Webhook R2 links failed for {job_id}: {e}")
@@ -4616,6 +4654,9 @@ def _refresh_partial_result(job_id, output_dir):
         ready_files = (jobs.get(job_id) or {}).get('ready_files') or {}
         ready_clips = []
         for i, clip in enumerate(clips):
+            if clip.get('delivery_validated') is False:
+                continue
+            clip['clip_index'] = i
             clip_filename = ready_files.get(i)
             if not clip_filename:
                 continue
@@ -4624,7 +4665,8 @@ def _refresh_partial_result(job_id, output_dir):
                 clip['video_url'] = f"/videos/{job_id}/{clip_filename}"
                 ready_clips.append(clip)
         if ready_clips:
-            jobs[job_id]['result'] = {'clips': ready_clips, 'cost_analysis': cost_analysis}
+            jobs[job_id]['result'] = {'clips': ready_clips, 'cost_analysis': cost_analysis,
+                                      'output_contract': _delivered_contract(data, len(ready_clips))}
     except Exception:
         # Ignore read errors during processing
         pass
@@ -4671,7 +4713,8 @@ def _finish_job(job_id, returncode, output_dir):
                 if missing:
                     jobs[job_id]['logs'].append(
                         f"⚠️ {missing} of {len(clips)} clips failed to render.")
-                jobs[job_id]['result'] = {'clips': rendered, 'cost_analysis': cost_analysis}
+                jobs[job_id]['result'] = {'clips': rendered, 'cost_analysis': cost_analysis,
+                                         'output_contract': _delivered_contract(data, len(rendered))}
         else:
             jobs[job_id]['status'] = 'failed'
             jobs[job_id]['logs'].append("No metadata file generated.")
@@ -4930,7 +4973,7 @@ async def _run_job_remote(job_id, job_data):
 @app.get("/health")
 async def health():
     """Lightweight liveness probe for uptime monitoring."""
-    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True}}
+    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True, "output_contract": True}}
 
 
 @app.get("/health/ready")
@@ -5525,7 +5568,7 @@ async def process_endpoint(
         source_end = body.get("source_end")
 
     # Normalize output format (auto = keep pipeline default).
-    if output_format not in ("vertical", "horizontal", "square"):
+    if output_format not in ("vertical", "horizontal", "square", "original"):
         output_format = "auto"
 
     # Accepts a JSON list or a comma-separated form field.
@@ -6114,9 +6157,10 @@ async def download_all_clips(job_id: str, request: Request):
 
     files = []
     for i, clip in enumerate(data.get('shorts', [])):
-        url = None
-        if i < len(mem_clips):
-            url = (mem_clips[i] or {}).get('video_url')
+        if clip.get('delivery_validated') is False:
+            continue
+        mem_clip = _result_clip(jobs.get(job_id), i)
+        url = mem_clip.get('video_url') if mem_clip else None
         url = url or clip.get('video_url')
         filename = (os.path.basename(url.split('/')[-1]) if url
                     else _canonical_clip_file(output_dir, base_name, i))
@@ -6263,24 +6307,16 @@ async def _restore_job_files(job_id: str, proj, user_id: str) -> bool:
         json_files = glob.glob(os.path.join(job_dir, "*_metadata.json"))
         if not json_files:
             raise HTTPException(status_code=502, detail="Project metadata missing")
-        with open(json_files[0], 'r') as f:
-            data = json.load(f)
-        base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
-        clips = data.get('shorts', [])
-        for i, clip in enumerate(clips):
-            if not clip.get('video_url'):
-                clip['video_url'] = (
-                    f"/videos/{job_id}/"
-                    f"{_canonical_clip_file(job_dir, base_name, i)}")
+        result = _result_from_disk(job_id, job_dir)
         if any(watermarked.is_marked(c.get("server_file") or "")
                for c in (proj.state or {}).get("clips", [])):
             watermarked.mark_job(job_dir)
         jobs[job_id] = {
-            'status': 'completed',
+            'status': 'completed' if result else 'failed',
             'logs': _TimedLog(["♻️ Project restored from your library."]),
             'output_dir': job_dir,
             'user_id': user_id,
-            'result': {'clips': clips, 'cost_analysis': data.get('cost_analysis')},
+            'result': result,
         }
     if pulled:
         print(f"♻️  Restored {job_id} from the library (working files were gone).")
@@ -6394,7 +6430,7 @@ async def edit_clip(
             filename = safe_name
         else:
             # Fallback to original clip
-            clip = job['result']['clips'][req.clip_index]
+            clip = _result_clip(job, req.clip_index)
             filename = clip['video_url'].split('/')[-1]
             input_path = os.path.join(OUTPUT_DIR, req.job_id, filename)
         
@@ -6497,8 +6533,8 @@ async def edit_clip(
 
         # Persist the new current file like /api/subtitle does: in-memory job
         # result + metadata.json, so reload/recovery/re-archive see this version.
-        if req.clip_index < len(job['result']['clips']):
-            job['result']['clips'][req.clip_index]['video_url'] = new_video_url
+        if _result_clip(job, req.clip_index) is not None:
+            _result_clip(job, req.clip_index)['video_url'] = new_video_url
         try:
             meta_files = glob.glob(os.path.join(OUTPUT_DIR, req.job_id, "*_metadata.json"))
             if meta_files:
@@ -6808,6 +6844,8 @@ async def _rerender_locked(req: RerenderRequest, request: Request, job):
     if req.clip_index < 0 or req.clip_index >= len(clips):
         raise HTTPException(status_code=404, detail="Clip not found")
     clip = clips[req.clip_index]
+    if clip.get('delivery_validated') is False and not data.get('delivery_contract'):
+        raise HTTPException(status_code=409, detail='Original delivery contract unavailable; start a new job')
     transcript = data.get('transcript') or {}
 
     base_name = os.path.basename(json_files[0]).replace('_metadata.json', '')
@@ -6921,12 +6959,20 @@ async def _rerender_locked(req: RerenderRequest, request: Request, job):
         # captions from the transcript (in the recorded style, if any).
         if clip.get('caption_words'):
             updates['caption_words'] = None
+        updates.update(_validate_recut_delivery(data, output_dir, served_name, _clean_recut_name))
+        # The previous render's frame range no longer describes this EDL.
+        updates['rendered_source_range'] = None
         clip.update(updates)
         data['shorts'] = clips
+        delivered, _ = _clips_actually_rendered(
+            req.job_id, output_dir, base_name, [dict(c) for c in clips])
+        if data.get('output_contract'):
+            data['output_contract'] = _delivered_contract(data, len(delivered))
         write_json_atomic(json_files[0], data, indent=2)
-        mem_clips = (job.get('result') or {}).get('clips') or []
-        if req.clip_index < len(mem_clips):
-            mem_clips[req.clip_index].update(updates)
+        job.setdefault('ready_files', {})[req.clip_index] = served_name
+        job['result'] = _result_from_disk(req.job_id, output_dir)
+        if job['result']:
+            job['status'] = 'completed'
 
         _archive_clip_edit_bg(req.job_id, req.clip_index, served_name)
         if reservation_id:
@@ -7016,7 +7062,7 @@ async def get_clip_scenes(job_id: str, clip_index: int, request: Request):
     if clip_index < 0 or clip_index >= len(clips):
         raise HTTPException(status_code=404, detail="Clip not found")
 
-    if data.get('output_format') == 'horizontal':
+    if data.get('output_format') in ('horizontal', 'original'):
         raise HTTPException(
             status_code=400,
             detail="Horizontal clips keep the full frame; there is no crop to reframe.")
@@ -7205,8 +7251,10 @@ async def _reframe_locked(req: ReframeRequest, request: Request, job, overrides)
     if req.clip_index < 0 or req.clip_index >= len(clips):
         raise HTTPException(status_code=404, detail="Clip not found")
     clip = clips[req.clip_index]
+    if clip.get('delivery_validated') is False and not data.get('delivery_contract'):
+        raise HTTPException(status_code=409, detail='Original delivery contract unavailable; start a new job')
 
-    if data.get('output_format') == 'horizontal':
+    if data.get('output_format') in ('horizontal', 'original'):
         raise HTTPException(
             status_code=400,
             detail="Horizontal clips keep the full frame; there is no crop to reframe.")
@@ -7275,12 +7323,20 @@ async def _reframe_locked(req: ReframeRequest, request: Request, job, overrides)
             'crop_overrides': {str(k): v for k, v in overrides.items()},
             'layout_ranges': layout_ranges.read(os.path.join(output_dir, _clean)),
         }
+        updates.update(_validate_recut_delivery(data, output_dir, served_name, _clean))
+        # The previous render's frame range no longer describes this EDL.
+        updates['rendered_source_range'] = None
         clip.update(updates)
         data['shorts'] = clips
+        delivered, _ = _clips_actually_rendered(
+            req.job_id, output_dir, base_name, [dict(c) for c in clips])
+        if data.get('output_contract'):
+            data['output_contract'] = _delivered_contract(data, len(delivered))
         write_json_atomic(json_files[0], data, indent=2)
-        mem_clips = (job.get('result') or {}).get('clips') or []
-        if req.clip_index < len(mem_clips):
-            mem_clips[req.clip_index].update(updates)
+        job.setdefault('ready_files', {})[req.clip_index] = served_name
+        job['result'] = _result_from_disk(req.job_id, output_dir)
+        if job['result']:
+            job['status'] = 'completed'
 
         _archive_clip_edit_bg(req.job_id, req.clip_index, served_name)
         if reservation_id:
@@ -7427,7 +7483,7 @@ async def generate_effects_config(
             safe_name = os.path.basename(req.input_filename)
             input_path = os.path.join(OUTPUT_DIR, req.job_id, safe_name)
         else:
-            clip = job['result']['clips'][req.clip_index]
+            clip = _result_clip(job, req.clip_index)
             filename = clip['video_url'].split('/')[-1]
             input_path = os.path.join(OUTPUT_DIR, req.job_id, filename)
 
@@ -7707,8 +7763,8 @@ async def add_subtitles(req: SubtitleRequest, request: Request):
 
     # 3. Update Result and Metadata
     # Update InMemory Jobs
-    if req.clip_index < len(job['result']['clips']):
-         job['result']['clips'][req.clip_index]['video_url'] = f"/videos/{req.job_id}/{output_filename}"
+    if _result_clip(job, req.clip_index) is not None:
+         _result_clip(job, req.clip_index)['video_url'] = f"/videos/{req.job_id}/{output_filename}"
     
     # Update Metadata on Disk (Persistence)
     try:
@@ -7788,8 +7844,8 @@ async def remove_subtitles(req: RemoveSubtitlesRequest, request: Request):
     # is reused when the clip shipped that way (no encode).
     filename = await _deliver(request, req.job_id, filename)
     new_url = f"/videos/{req.job_id}/{filename}"
-    if req.clip_index < len(job.get('result', {}).get('clips', [])):
-        job['result']['clips'][req.clip_index]['video_url'] = new_url
+    if _result_clip(job, req.clip_index) is not None:
+        _result_clip(job, req.clip_index)['video_url'] = new_url
     try:
         clips[req.clip_index]['video_url'] = new_url
         data['shorts'] = clips
@@ -7927,8 +7983,8 @@ async def add_hook(req: HookRequest, request: Request):
 
     # Update Persistence (Same logic as subtitles)
     # Update InMemory Jobs
-    if req.clip_index < len(job['result']['clips']):
-        mem_clip = job['result']['clips'][req.clip_index]
+    if _result_clip(job, req.clip_index) is not None:
+        mem_clip = _result_clip(job, req.clip_index)
         mem_clip['video_url'] = f"/videos/{req.job_id}/{output_filename}"
         if req.remove:
             mem_clip.pop('auto_hook', None)
@@ -8042,8 +8098,8 @@ async def translate_clip(
     output_filename = await _deliver(request, req.job_id, output_filename)
 
     # Update InMemory Jobs
-    if req.clip_index < len(job['result']['clips']):
-         job['result']['clips'][req.clip_index]['video_url'] = f"/videos/{req.job_id}/{output_filename}"
+    if _result_clip(job, req.clip_index) is not None:
+         _result_clip(job, req.clip_index)['video_url'] = f"/videos/{req.job_id}/{output_filename}"
 
     # Update Metadata on Disk
     try:
@@ -8187,7 +8243,7 @@ async def post_to_socials(req: SocialPostRequest, request: Request):
                 "fail. Use \"connect socials\" and try again."))
 
     try:
-        clip = job['result']['clips'][req.clip_index]
+        clip = _result_clip(job, req.clip_index)
         # Video URL is relative /videos/..., we need absolute file path
         # clip['video_url'] is like "/videos/{job_id}/{filename}"
         # We constructed it as: f"/videos/{job_id}/{clip_filename}"

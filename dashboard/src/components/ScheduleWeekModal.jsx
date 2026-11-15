@@ -135,7 +135,7 @@ export default function ScheduleWeekModal({ isOpen, onClose, clips, jobId, uploa
 
             const payload = {
                 job_id: jobId,
-                clip_index: index,
+                clip_index: clip.clip_index ?? index,
                 api_key: uploadPostKey,
                 user_id: uploadUserId,
                 platforms: selectedPlatforms,

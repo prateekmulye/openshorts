@@ -45,7 +45,7 @@ def test_lists_are_copies():
     assert yt_clients.hd_extractor_args("", "/x.js")["youtube"]["player_client"] == ["default", "mweb"]
 
 
-def test_probe_uses_the_same_lists(monkeypatch):
+def test_probe_uses_the_same_lists(public_youtube_dns, monkeypatch):
     metering = pytest.importorskip("cloud.metering")
     monkeypatch.setenv("BGUTIL_SCRIPT_PATH", "/opt/gen.js")
     monkeypatch.delenv("BGUTIL_BASE_URL", raising=False)

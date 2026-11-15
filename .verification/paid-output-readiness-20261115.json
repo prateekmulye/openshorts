@@ -1,0 +1,80 @@
+{
+  "verdict": "PASS",
+  "meaning": "I could not break the corrected scoped code with these checks; not proof of correctness or paid acceptance.",
+  "reviewer": "independent paid_pipeline_verifier agent; context separated from producing agents",
+  "created_at": "2026-11-15T10:55:48.648424+00:00",
+  "repository": "/private/tmp/openshorts-paid-readiness",
+  "base_commit": "1d260689d9d4d073b5e55464a98aa95a3b2a26cd",
+  "scope": "Frozen changed implementation and tests listed below only; private pilot code gate. Runtime overlays separately reviewed. Excludes .trigger-tree.",
+  "verified": {
+    "local_vision.py": "e2edd12e135b239d104e51b587dc63d3eda3a905",
+    "output_contract.py": "c1c83c439336748f322f4ae07ab33766454d1dc1",
+    "tests/test_local_vision.py": "4a0d223e3cdf84b0f3259c4540d143d722b4c85c",
+    "tests/test_output_contract.py": "faa47d8f4abd5f34a099773fc9b2805c3d2c5fe9",
+    "app.py": "b3eb5b988b5a7d53878e77748ad055e4f80caa6b",
+    "clip_selection.py": "6fff01f4dbe33f6341552f5583c22d34443d31ea",
+    "llm_backend.py": "c0c30d5fb614dcf8b86385bba03dfd623d49c223",
+    "main.py": "e026ea826cd029b1a4ad2fe99c3f37d1040cb9e3",
+    "recut.py": "efe3307c4f6979302fb7e53064f2f0b5c9d8c737",
+    "tests/conftest.py": "22a1fbae872be757bcafd599acd2b091c9b42f0f",
+    "tests/test_clip_ready_marker.py": "173d447113ae8f5facf3068eed69cd1fa9fa908f",
+    "tests/test_minutes_transparency.py": "396d61375a225682848120ccb9f745cbe6070039",
+    "tests/test_partial_processing.py": "201223b2d74c1d18804894107241ef764326d733",
+    "tests/test_phantom_clips.py": "2e0b51e771e87915cf85f66b892354f5841f064c",
+    "tests/test_process_handover.py": "00833b4795d19bb04bb6a029a6483634ea454358",
+    "tests/test_proxy_ledger.py": "d68f21ee55208e10deb58731f8222023768e624f",
+    "tests/test_short_source_gate.py": "faf9a5a021ceb2c7856ba92b41d6ea5474759e9c",
+    "tests/test_social_publication_outcomes.py": "af562ac298cb368d3531241398eb5b992febe8ef",
+    "tests/test_yt_clients.py": "ed6a6e7e44da4b68dea144632c3ec5485da63c60"
+  },
+  "sha256": {
+    "local_vision.py": "02ff0f781e29ffedfe600298c8bb836d8bdb5379d31907f3bb733a47689defcf",
+    "output_contract.py": "dbc20c3f94fbce3935c48f29c69f3f8a7d0496544be4adbb70fe3d54802a7496",
+    "tests/test_local_vision.py": "385cbb0380629c93340a722a614f0a42546786c91a396bbc86147ab8508b2982",
+    "tests/test_output_contract.py": "ad24981f5e582a0852d5a31f6d9a3fdf4d57f65b3a5e421ee8a63adb395febd9",
+    "app.py": "35b88660815d66cb4f0079f831bd554e7c5ed3b304629dbbe6b752b837372a7f",
+    "clip_selection.py": "b51199f6e3ec31a3321b386e86421b405e8a6081f4d1feb10feac8c3115083f3",
+    "llm_backend.py": "e504e7db3488b18d9f6637361fb829c715cb2b21c70e9637c270478cf9d67169",
+    "main.py": "7b4cb7fa160db5459ad39b91de35b20deaf66d08fcd63ccb9bab977c69d92843",
+    "recut.py": "93bd0beccdceef60acc326a116316dcbabd5b34a7ec3d8667702f09c13ac94b3",
+    "tests/conftest.py": "e2df9ab5690065751114cbffcb684ce63089d482c1d16554a7623fc5db5652fa",
+    "tests/test_clip_ready_marker.py": "0c3adae79e8fdb00c549745972657a80d3b35cc156f16556dacbbec1aa95e1ba",
+    "tests/test_minutes_transparency.py": "c06ede256d8a9b886d38a4b382e51c654495d88ca7965408d8481d9a8697fdca",
+    "tests/test_partial_processing.py": "9dacf59782dbe7c5b9b726d3399366454ed38db69c951e457ca7cc601fbc0030",
+    "tests/test_phantom_clips.py": "33f7bd598092c5490e9042b49dc71508360bc71f9b4dae852efb9da9fdf5fa39",
+    "tests/test_process_handover.py": "095bb61be05e04da4ea161f418d43750f310dfd8c2a681b9dc588e7a6cf87047",
+    "tests/test_proxy_ledger.py": "d972ab7aeea5425c0ed48f9c1f70a2fd8aa8215349180a0ba65b644015327f92",
+    "tests/test_short_source_gate.py": "1cf7d1c5718d82936079977354fe84aff99db6dbf215c39701ca39eacc7fb0d1",
+    "tests/test_social_publication_outcomes.py": "f8d1649f6153ce9df667aebf73ac6ddcf9f9914dfa085f3961e5dfdd2b7317f8",
+    "tests/test_yt_clients.py": "8bc3495ce5ddfdd3118ff4304967c5703c47ccc0a3097292b5e900d7f1df02ba"
+  },
+  "record_binding": "Git blob IDs computed from reviewed worktree bytes, without staging or committing. Any later staged blob must match.",
+  "independent_commands": [
+    {
+      "command_file": "/private/tmp/wheelman-paid-readiness-evidence/verifier/engine-full-command.json",
+      "substitute_source_path": "/tmp/paid-verifier-runtime",
+      "result": "2220 passed, 12 skipped, 2 warnings in 41.47s",
+      "exit_code": 0,
+      "log": "/private/tmp/wheelman-paid-readiness-evidence/verifier/batch-v2-full.log"
+    }
+  ],
+  "mutation_evidence": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/engine-mutations.json",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/batch-v2-mutations.json"
+  ],
+  "final_mutation_survivors": [],
+  "reports": [
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/code-review.md",
+    "/private/tmp/wheelman-paid-readiness-evidence/verifier/batch-v2-review.md"
+  ],
+  "runtime_v2_check": "/private/tmp/wheelman-paid-readiness-evidence/verifier/runtime-v2-independent.json",
+  "separate_security_review": "/private/tmp/wheelman-paid-readiness-evidence/security/review-recheck.md",
+  "security_scope_note": "Relay/client security hashes unchanged; sampler grouping delta independently code-reviewed, not a renewed comprehensive security audit.",
+  "blind_spots": [
+    "Fresh twenty-job artifact audit pending; no commercial acceptance inferred.",
+    "N3on processing and semantic quality not checked.",
+    "Actual n8n execution, authenticated human reviewer identity, publication, payment, production deployment not checked.",
+    "Engine GPU and GeoIP-dependent tests skipped for unavailable environment capabilities.",
+    "No exhaustive mutation testing, codec fuzzing, or sustained capacity claim."
+  ]
+}

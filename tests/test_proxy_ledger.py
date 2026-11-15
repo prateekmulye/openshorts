@@ -81,7 +81,7 @@ def test_probe_never_reaches_paid_for_non_youtube(monkeypatch):
     assert metering.pop_paid_probe_events() == []
 
 
-def test_probe_reaches_paid_only_for_ip_specific_failures(monkeypatch):
+def test_probe_reaches_paid_only_for_ip_specific_failures(public_youtube_dns, monkeypatch):
     monkeypatch.setenv("PROXY_URL", "http://paid")
     monkeypatch.setenv("STATIC_PROXY_URLS", "http://s1")
     monkeypatch.delenv("DIRECT_FIRST", raising=False)
@@ -307,7 +307,7 @@ class TestStaticProbeAgainstYouTube:
         assert ok and calls["url"].startswith("http://www.google.com")
 
 
-def test_probe_uses_the_download_cookies(monkeypatch, tmp_path):
+def test_probe_uses_the_download_cookies(public_youtube_dns, monkeypatch, tmp_path):
     """An anonymous probe gets "Sign in to confirm you're not a bot" from the
     static IPs (4-sep-2026: ~10 probes/day, 1.8 MB each on the per-GB proxy)
     while the cookie-authenticated download passes on those same IPs."""
@@ -338,7 +338,7 @@ def test_probe_uses_the_download_cookies(monkeypatch, tmp_path):
     assert not os.path.exists(seen["cookiefile"])
 
 
-def test_probe_without_cookies_configured_still_works(monkeypatch):
+def test_probe_without_cookies_configured_still_works(public_youtube_dns, monkeypatch):
     monkeypatch.delenv("YOUTUBE_COOKIES", raising=False)
     monkeypatch.delenv("STATIC_PROXY_URLS", raising=False)
     monkeypatch.delenv("PROXY_URL", raising=False)
