@@ -20,8 +20,8 @@ def probe(path):
     return {s['codec_type']:s for s in data['streams']}
 
 
-def fixture_video(path, *, shifted=False, audio=False):
-    cmd = ['ffmpeg','-v','error','-y','-f','lavfi','-i',"nullsrc=size=96x54:rate=24000/1001,geq=lum='16+N*2':cb=128:cr=128"]
+def fixture_video(path, *, shifted=False, audio=False, rate="24000/1001"):
+    cmd = ['ffmpeg','-v','error','-y','-f','lavfi','-i',f"nullsrc=size=96x54:rate={rate},geq=lum='16+N*2':cb=128:cr=128"]
     if audio:
         cmd += ['-f','lavfi','-i','aevalsrc=sin(2*PI*(440*t+80*t*t)):s=48000']
     cmd += ['-t','4.5','-c:v','libx264','-preset','ultrafast','-qp','0','-fps_mode','passthrough']
@@ -99,3 +99,28 @@ def test_recut_uses_same_source_frame_and_audio_budget(tmp_path, monkeypatch):
     assert int(streams['video']['nb_frames']) == 90
     assert float(streams['video']['duration']) == pytest.approx(3.75375,abs=0.000001)
     assert abs(float(streams['audio']['duration'])-3.75375) <= 0.001
+
+
+@pytest.mark.parametrize('cutter',['pipeline','recut'])
+@pytest.mark.parametrize('start,end,frames,duration',[(0.13,3.93,90,3.75),(0.46,4.5,96,4.0)])
+def test_integer_cfr_cut_has_aligned_audio_and_video_budget(tmp_path,monkeypatch,cutter,start,end,frames,duration):
+    """24fps reproduces the v3 replay's skipped integer-rate branch.
+
+    Non-grid cuts expose late video start; a cut reaching source EOF exposes
+    loudnorm's audio overrun. Both ends must match the inward frame budget.
+    """
+    import recut
+    monkeypatch.setenv('FFMPEG_ENCODER','x264')
+    monkeypatch.setenv('AUDIO_NORMALIZE','1')
+    source=tmp_path/'source.mp4';output=tmp_path/'cut.mp4'
+    fixture_video(source,audio=True,rate='24')
+    if cutter=='pipeline':
+        ffmpeg_utils.cut_clip(str(source),str(output),start,end,1)
+    else:
+        recut.run_cut_concat(str(source),[{'start':start,'end':end}],str(output),str(tmp_path))
+    streams=probe(output);v=streams['video'];a=streams['audio']
+    assert float(v['start_time']) == 0
+    assert float(a['start_time']) == 0
+    assert int(v['nb_frames']) == frames
+    assert float(v['duration']) == pytest.approx(duration,abs=0.000001)
+    assert abs(float(a['duration'])-duration) <= 0.001

@@ -343,8 +343,8 @@ def _gpu_cut_ok(input_video):
     return _gpu_cut_sources[input_video]
 
 
-def _fractional_frame_cut(input_video, start, end):
-    """Inward whole-frame bounds for fractional CFR; other inputs keep their path."""
+def _cfr_frame_cut(input_video, start, end):
+    """Inward whole-frame bounds for CFR; other inputs keep their path."""
     if not os.path.isfile(input_video):
         return None
     import json
@@ -357,7 +357,7 @@ def _fractional_frame_cut(input_video, start, end):
             '-of', 'json', input_video], stderr=subprocess.DEVNULL, timeout=30))
         stream = data['streams'][0]
         fps = Fraction(stream['avg_frame_rate'])
-        if fps <= 0 or fps.denominator == 1 or fps != Fraction(stream['r_frame_rate']):
+        if fps <= 0 or fps != Fraction(stream['r_frame_rate']):
             return None
         origin = Fraction(stream.get('start_time') or '0')
         first = math.ceil((Fraction(str(start)) - origin) * fps)
@@ -388,7 +388,7 @@ def cut_clip(input_video, clip_temp_path, start, end, clip_number):
     session cannot allocate on a GPU that other jobs are filling.
     """
     encode_args = video_encode_args(INTERMEDIATE)
-    timing = _fractional_frame_cut(input_video, start, end)
+    timing = _cfr_frame_cut(input_video, start, end)
     output_timing = []
     if timing:
         start, end, frame_count, source_rate = timing

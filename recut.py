@@ -25,7 +25,7 @@ import time
 import uuid
 
 from ffmpeg_utils import (METADATA_SCRUB, QUALITY_FAST, audio_encode_args,
-                          video_encode_args, _fractional_frame_cut)
+                          video_encode_args, _cfr_frame_cut)
 
 # EDL limits. Deliberately generous — the editor is for humans fixing cuts,
 # not for stitching feature films.
@@ -186,7 +186,7 @@ def cut_commands(input_path, segments, part_paths):
     commands = []
     for seg, part in zip(segments, part_paths):
         start, end = seg['start'], seg['end']
-        timing = _fractional_frame_cut(input_path, start, end)
+        timing = _cfr_frame_cut(input_path, start, end)
         output_timing = []
         if timing:
             start, end, frames, rate = timing
