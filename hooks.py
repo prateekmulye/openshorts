@@ -721,8 +721,14 @@ def materialize(output_dir, hooked_name):
     # into a filter graph, whoever wrote it.
     try:
         x, y = int(r["x"]), int(r["y"])
-        duration = float(r["duration"]) if r.get("duration") else None
-    except (KeyError, TypeError, ValueError):
+        duration = r.get("duration")
+        if isinstance(duration, bool):
+            return False
+        # AUTO_HOOK_SECONDS=0 historically means the whole clip, like None.
+        if isinstance(duration, (int, float)) and duration == 0:
+            duration = None
+        duration = float(duration) if duration is not None else None
+    except (KeyError, TypeError, ValueError, OverflowError):
         return False
     if not (-20000 <= x <= 20000 and -20000 <= y <= 20000) or (
             duration is not None and not 0 < duration < 86400):
