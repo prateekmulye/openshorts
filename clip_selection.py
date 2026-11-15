@@ -325,6 +325,17 @@ def dedupe_overlapping(shorts, ratio=0.25):
     return [c for _, c in sorted(kept, key=lambda p: p[0])]
 
 
+def valid_clip_bounds(start, end, video_duration, min_duration, max_duration):
+    """Validate timing after snapping; never repair an invalid model fallback."""
+    try:
+        start, end, duration = float(start), float(end), float(video_duration)
+        return (all(math.isfinite(v) for v in (start, end, duration))
+                and 0 <= start < end <= duration
+                and min_duration <= end - start <= max_duration)
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
 def snap_clip_to_words(start, end, words, video_duration,
                        min_duration=15.0, max_duration=60.0,
                        search_window=1.5, max_lead=0.35, max_tail=0.45):

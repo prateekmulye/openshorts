@@ -117,7 +117,7 @@ def dirs(tmp_path, monkeypatch):
     return out_root, up_root
 
 
-def test_source_range_reaches_the_reservation_and_the_job(dirs, monkeypatch):
+def test_source_range_reaches_the_reservation_and_the_job(public_youtube_dns, dirs, monkeypatch):
     out_root, _ = dirs
     partial = {"processed_minutes": 5, "total_minutes": 45, "start_seconds": 130.0,
                "end_seconds": 460.0, "chosen": True}

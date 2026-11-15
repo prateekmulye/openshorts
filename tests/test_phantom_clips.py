@@ -121,3 +121,20 @@ class TestPhantomClips:
 
         assert kept == []
         assert missing == 1
+
+
+def test_rejected_contract_file_is_not_resurrected(tmp_path):
+    _write(str(tmp_path), 'MKG_clip_1.mp4')
+    clip = dict(_clip('rejected'), delivery_validated=False)
+    kept, missing = app._clips_actually_rendered('contract-job', str(tmp_path), 'MKG', [clip])
+    assert kept == []
+    assert missing == 1
+
+
+def test_missing_delivered_file_cannot_keep_complete_contract():
+    result = app._delivered_contract({'output_contract': {
+        'requested_min':2, 'requested_max':2, 'selected_count':2,
+        'delivered_count':2, 'status':'complete'}}, 1)
+    assert result['status'] == 'partial'
+    assert result['delivered_count'] == 1
+    assert result['shortfall_count'] == 1

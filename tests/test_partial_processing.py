@@ -149,7 +149,7 @@ def _stub_reservation(monkeypatch, partial):
     return seen
 
 
-def test_max_minutes_reaches_the_reservation_and_the_job(dirs, monkeypatch):
+def test_max_minutes_reaches_the_reservation_and_the_job(public_youtube_dns, dirs, monkeypatch):
     out_root, _ = dirs
     partial = {"processed_minutes": 20, "total_minutes": 45}
     seen = _stub_reservation(monkeypatch, partial)
@@ -170,7 +170,7 @@ def test_max_minutes_reaches_the_reservation_and_the_job(dirs, monkeypatch):
     assert manifest["partial"] == partial
 
 
-def test_whole_video_job_is_untouched(dirs, monkeypatch):
+def test_whole_video_job_is_untouched(public_youtube_dns, dirs, monkeypatch):
     _stub_reservation(monkeypatch, None)
     resp = _post_process({"url": "https://www.youtube.com/watch?v=ok", "acknowledged": True})
     assert resp.status_code == 200

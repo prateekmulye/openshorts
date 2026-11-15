@@ -30,12 +30,13 @@ import gemini_worker
 import hook_grounding
 import layout_picker
 import llm_backend
+import output_contract
 import yt_account
 import twitch_signals
 from clip_selection import (build_transcript_windows, clip_count_targets,
                             clip_duration_bounds, dedupe_overlapping,
                             score_batches, shortlist_target,
-                            snap_clip_to_words, trim_to_best,
+                            snap_clip_to_words, trim_to_best, valid_clip_bounds,
                             vision_segments)
 from ffmpeg_utils import (video_encode_args, audio_encode_args, cut_clip, QUALITY,
                           QUALITY_FAST, METADATA_SCRUB)
@@ -1531,7 +1532,7 @@ def render_clip(input_video, final_output_video, output_format="auto",
     source's own burned-in subtitles off the bottom first, so our captions are
     the only text layer. Every render from the source passes it: the job, the
     recut and the editor's re-render."""
-    trimmed = trim_subtitle_band(input_video, subtitle_band)
+    trimmed = input_video if output_format == "original" else trim_subtitle_band(input_video, subtitle_band)
     try:
         return _render_clip(trimmed, final_output_video, output_format,
                             force_strategy, crop_overrides, watermark)
@@ -1542,7 +1543,7 @@ def render_clip(input_video, final_output_video, output_format="auto",
 
 def _render_clip(input_video, final_output_video, output_format,
                  force_strategy, crop_overrides, watermark):
-    if output_format == "horizontal":
+    if output_format in ("horizontal", "original"):
         ok = finalize_clip_passthrough(input_video, final_output_video)
         if ok and watermark:
             apply_watermark(final_output_video)
@@ -2212,50 +2213,53 @@ def get_viral_clips(transcript_result, video_duration, viewer_clips=None):
                                   _detail_prompt_for(min_clips, max_clips),
                                   gemini_worker.DetailResponse, "shorts", costs, "detail")
 
-        # The floor lived only in the prompt, and a prompt is not a contract:
-        # the model regularly returned half of it and the job shipped that.
-        # The windows it passed over are the cheap second chance — they are
-        # already the best-scoring ones in the video — so they get one more
-        # call for the missing clips. It may still come back empty, which is
-        # the honest answer for material that does not hold more.
+        def _accepted(proposals):
+            clean = []
+            for s in proposals:
+                start, end = s.get("start"), s.get("end")
+                if not valid_clip_bounds(start, end, video_duration, 0, video_duration):
+                    continue
+                s["proposed"] = [start, end]
+                ns, ne = snap_clip_to_words(start, end, words, video_duration,
+                                           min_duration=min_secs, max_duration=max_secs)
+                if valid_clip_bounds(ns, ne, video_duration, min_secs, max_secs):
+                    s["start"], s["end"] = ns, ne
+                    clean.append(s)
+            return trim_to_best(dedupe_overlapping(clean), max_clips)
+
+        shorts = _accepted(shorts)
         if len(shorts) < min_clips:
+            # One bounded retry, after validation and dedupe. Revisit unused
+            # time in a used window when the shortlist has no unused windows.
             used = {str(s.get("source_window_id") or "") for s in shorts}
-            spare = [w for w in shortlist if w["id"] not in used]
+            candidates = [w for w in shortlist if w["id"] not in used] or shortlist
+            spare = []
+            for w in candidates:
+                spans = [(w["start"], w["end"])]
+                for clip in shorts:
+                    spans = [(a, b) for lo, hi in spans
+                             for a, b in ((lo, min(hi, clip["start"])),
+                                          (max(lo, clip["end"]), hi))
+                             if b - a >= min_secs]
+                spare.extend(dict(w, start=a, end=b) for a, b in spans)
             if spare:
                 missing = min_clips - len(shorts)
-                print(f"   Detail returned {len(shorts)} clip(s) of {min_clips}; "
-                      f"asking the {len(spare)} unused window(s) for {missing} more.")
-                extra = _run_stage_split(
-                    client, model_name, spare,
-                    _detail_prompt_for(missing, max(missing, len(spare))),
+                excluded = [[s["start"], s["end"]] for s in shorts]
+                def refill_prompt(ws):
+                    return (_detail_prompt_for(missing, max(missing, len(spare)))(ws)
+                            + "\nChoose only unused time; do not overlap these accepted clips."
+                            + "\nEXCLUDED_INTERVALS_JSON: " + json.dumps(excluded))
+                proposals = _run_stage_split(
+                    client, model_name, spare, refill_prompt,
                     gemini_worker.DetailResponse, "shorts", costs, "detail-floor")
-                if extra:
-                    shorts = sorted(shorts + extra,
-                                    key=lambda s: float(s.get("start") or 0))
-                    print(f"   Recovered {len(extra)} clip(s) from them.")
-
-        if len(shorts) > max_clips:
-            # By score, never by position: the results arrive in transcript
-            # order, so slicing kept the earliest clips and silently dropped
-            # the back half of the video. See trim_to_best.
-            dropped = len(shorts) - max_clips
-            shorts = trim_to_best(shorts, max_clips)
-            print(f"   Kept the {max_clips} best-scoring clip(s) of "
-                  f"{max_clips + dropped}.")
-        # Snap each proposed clip onto real word boundaries (+ a bit of silence).
-        for s in shorts:
-            # Keep the model's raw proposal: it is how boundary accuracy is
-            # measured (distance to the nearest word before the snap; p90 was
-            # 0.4-0.5 s on 8 talks, 21-sep-2026, so the snap reaches it).
-            s["proposed"] = [s.get("start", 0), s.get("end", 0)]
-            ns, ne = snap_clip_to_words(s.get("start", 0), s.get("end", 0), words, video_duration,
-                                        min_duration=min_secs, max_duration=max_secs)
-            s["start"], s["end"] = ns, ne
-        deduped = dedupe_overlapping(shorts)
-        if len(deduped) < len(shorts):
-            print(f"   Dropped {len(shorts) - len(deduped)} clip(s) overlapping a "
-                  f"better-scored one.")
-            shorts = deduped
+                extra = _accepted([s for s in proposals
+                                   if valid_clip_bounds(s.get("start"), s.get("end"), video_duration, 0, video_duration)
+                                   and any(w["start"] <= float(s["start"]) < float(s["end"]) <= w["end"] for w in spare)])
+                # Word snapping may cross a window edge into real silence,
+                # but it must never cross an already accepted clip.
+                extra = [s for s in extra if all(s["end"] <= c["start"] or s["start"] >= c["end"] for c in shorts)]
+                shorts = trim_to_best(dedupe_overlapping(shorts + extra), max_clips)
+        shorts.sort(key=lambda s: s["start"])
 
         # Aggregate cost across both passes.
         cost_analysis = None
@@ -2268,11 +2272,8 @@ def get_viral_clips(transcript_result, video_duration, viewer_clips=None):
             }
             print(f"\U0001f4b0 Total cost ({model_name}, 2-pass, {len(costs)} calls): ${cost_analysis['total_cost']:.6f}")
 
-        if not shorts:
-            print("⚠️ 2-pass returned no clips.")
-            return None
-
-        result = {"shorts": shorts}
+        result = {"shorts": shorts,
+                  "output_contract": output_contract.outcome(min_clips, max_clips, len(shorts))}
         if cost_analysis:
             result["cost_analysis"] = cost_analysis
         return result
@@ -2404,9 +2405,8 @@ def _visual_pass(client, model_name, video_path, duration, language,
         parsed = json.loads(response.text)
         clean = []
         for s in parsed.get("shorts") or []:
-            s["start"] = max(0.0, float(s.get("start", 0)))
-            s["end"] = min(float(duration), float(s.get("end", 0)))
-            if s["end"] - s["start"] >= 1.0:
+            if valid_clip_bounds(s.get("start"), s.get("end"), duration, min_secs, max_secs):
+                s["start"], s["end"] = float(s["start"]), float(s["end"])
                 clean.append(s)
         return clean, gemini_worker._calculate_cost_analysis(response, model_name)
     finally:
@@ -2429,19 +2429,6 @@ def get_visual_clips(video_path, video_duration, language="en", viewer_clips=Non
     stretch (``vision_segments``), and the picks are merged, de-overlapped
     and cut to the best ``CLIP_TARGET_MAX`` by score: a silent multi-hour
     console capture used to fail at the model."""
-    print("🎥  Silent video — analyzing with Gemini vision (no transcript)...")
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        if llm_backend.active():
-            print("❌ This video has no usable speech, so it has to be clipped by "
-                  "watching it, and that needs Gemini (a text-only LLM server "
-                  "cannot see the footage). Add a GEMINI_API_KEY for silent videos.")
-        else:
-            print("❌ Error: GEMINI_API_KEY not found.")
-        return None
-    client = genai.Client(api_key=api_key)
-    model_name = os.environ.get("GEMINI_MODEL") or 'gemini-3.1-flash-lite'
-
     # The vision path has no scoring windows to derive a count from, so the
     # env targets (user request) apply directly over the classic 3-15.
     def _env_int(name, default):
@@ -2452,6 +2439,24 @@ def get_visual_clips(video_path, video_duration, language="en", viewer_clips=Non
     v_min_clips = _env_int("CLIP_TARGET_MIN", 3)
     v_max_clips = max(v_min_clips, _env_int("CLIP_TARGET_MAX", 15))
     v_min_secs, v_max_secs = clip_duration_bounds()
+
+    if llm_backend.active() and llm_backend.vision_model_name():
+        import local_vision
+        result = local_vision.get_visual_clips(video_path, video_duration,
+                                               gemini_worker.VisualResponse,
+                                               language=language, viewer_clips=viewer_clips)
+        clean = [s for s in result.get("shorts", [])
+                 if valid_clip_bounds(s.get("start"), s.get("end"), video_duration, v_min_secs, v_max_secs)]
+        result["shorts"] = trim_to_best(dedupe_overlapping(clean), v_max_clips)
+        result["output_contract"] = output_contract.outcome(v_min_clips, v_max_clips, len(result["shorts"]))
+        return result
+
+    print("🎥  Silent video — analyzing with Gemini vision (no transcript)...")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("CAPABILITY_UNAVAILABLE:visual_clip_selection — this video has no usable speech and no video-capable backend is configured; the local LLM path is text-only.")
+    client = genai.Client(api_key=api_key)
+    model_name = os.environ.get("GEMINI_MODEL") or 'gemini-3.1-flash-lite'
 
     segments = vision_segments(video_duration, VISION_SEGMENT_SECONDS, VISION_MAX_SEGMENTS)
     try:
@@ -2491,21 +2496,20 @@ def get_visual_clips(video_path, video_duration, language="en", viewer_clips=Non
                 costs.append(cost)
                 for sh in shorts or []:
                     sh["start"] = round(sh["start"] + s0, 3)
-                    sh["end"] = round(min(float(video_duration), sh["end"] + s0), 3)
-                    clean.append(sh)
+                    sh["end"] = round(sh["end"] + s0, 3)
+                    if valid_clip_bounds(sh["start"], sh["end"], video_duration, v_min_secs, v_max_secs):
+                        clean.append(sh)
                 print(f"   stretch {i + 1}/{len(segments)}: {len(shorts or [])} pick(s)")
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         clean.sort(key=lambda c: c["start"])
         clean = trim_to_best(dedupe_overlapping(clean), v_max_clips)
 
-        if not clean:
-            print("⚠️ Vision pass returned no usable clips.")
-            return None
         cost = _sum_costs(costs, model_name)
         if cost:
             print(f"💰 Vision cost ({model_name}): ${cost.get('total_cost', 0):.6f}")
-        result = {"shorts": clean}
+        result = {"shorts": clean,
+                  "output_contract": output_contract.outcome(v_min_clips, v_max_clips, len(clean))}
         if cost:
             result["cost_analysis"] = cost
         return result
@@ -2526,8 +2530,8 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, help="Output directory or file (if processing whole video).")
     parser.add_argument('--keep-original', action='store_true', help="Keep the downloaded YouTube video.")
     parser.add_argument('--skip-analysis', action='store_true', help="Skip AI analysis and convert the whole video.")
-    parser.add_argument('--format', type=str, default="auto", choices=["auto", "vertical", "horizontal", "square"],
-                        help="Output aspect: vertical/auto (9:16), horizontal (keep 16:9), square (1:1).")
+    parser.add_argument('--format', type=str, default="auto", choices=["auto", "vertical", "horizontal", "square", "original"],
+                        help="Output aspect: vertical/auto (9:16), horizontal/original (keep source display aspect), square (1:1).")
     parser.add_argument('--transcript', type=str,
                         help="Path to a precomputed transcript JSON (transcribe_media shape); skips transcription.")
     parser.add_argument('--prepare-only', action='store_true',
@@ -2831,6 +2835,9 @@ if __name__ == '__main__':
         else:
             clips_data = get_visual_clips(input_video, duration, viewer_clips=viewer_clips)
 
+        if clips_data and 'shorts' in clips_data and not clips_data['shorts']:
+            write_json_atomic(os.path.join(output_dir, f"{video_title}_metadata.json"), clips_data, indent=2)
+            raise RuntimeError("NO_SUITABLE_MOMENTS: no clip satisfied the requested timing contract.")
         if not clips_data or 'shorts' not in clips_data:
             # Deliberately fail instead of reframing the whole video: that path
             # wrote no metadata.json, so app.py marked the job failed anyway
@@ -2851,14 +2858,20 @@ if __name__ == '__main__':
             clips_data['output_format'] = output_format
             if source_subtitle_band:
                 clips_data['source_subtitle_band'] = source_subtitle_band
+            for clip in clips_data['shorts']:
+                clip['delivery_validated'] = False
             metadata_file = os.path.join(output_dir, f"{video_title}_metadata.json")
             write_json_atomic(metadata_file, clips_data, indent=2)
             print(f"   Saved metadata to {metadata_file}")
+
+            source_aspect = output_contract.probe(input_video)["display_aspect"]
+            delivery_min, delivery_max = clip_duration_bounds()
 
             # 5. Process clips in parallel: each worker cuts + renders one
             # clip. Renders are mostly ffmpeg subprocesses (parallelize well);
             # detector inference is serialized internally via DETECT_LOCK.
             def _process_one_clip(i, clip):
+                clip['delivery_validated'] = False
                 start = clip['start']
                 end = clip['end']
                 print(f"\n🎬 Processing Clip {i+1}: {start}s - {end}s")
@@ -2917,6 +2930,9 @@ if __name__ == '__main__':
                         served = captioned or deliver_path
                         if os.environ.get("WATERMARK") == "1":
                             served = mark_delivery(served)
+                        clip['delivery_probe'] = output_contract.validate_delivery(
+                            served, delivery_min, delivery_max, output_format, source_aspect)
+                        clip['delivery_validated'] = True
                         print(f"   ✅ Clip {i+1} ready: {clip_final_path}")
                         # Hand the API the file to actually serve for this clip.
                         # Without it the status poller guesses the clean reframe
@@ -2972,12 +2988,11 @@ if __name__ == '__main__':
                 except Exception as e:
                     print(f"   ❌ Clip {i+1} failed again: {type(e).__name__}: {e}")
 
-            # Persist per-clip render results added by the workers (auto_hook)
-            # so the editor can see what is already burned into each clip.
-            if any('auto_hook' in c or 'hook_grounding' in c for c in shorts):
-                # Atomic: the dashboard is already reading this file for the
-                # clips announced above (CLIP_READY).
-                write_json_atomic(metadata_file, clips_data, indent=2)
+            contract = clips_data['output_contract']
+            clips_data['output_contract'] = output_contract.outcome(
+                contract['requested_min'], contract['requested_max'], len(shorts),
+                sum(c.get('delivery_validated') is True for c in shorts))
+            write_json_atomic(metadata_file, clips_data, indent=2)
 
     # Clean up original if requested
     if args.url and not args.keep_original and os.path.exists(input_video):

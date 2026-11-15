@@ -1,5 +1,6 @@
 import os
 import llm_backend
+import output_contract
 import re
 import sys
 import uuid
@@ -1535,6 +1536,8 @@ def _clips_actually_rendered(job_id, output_dir, base_name, clips):
     ready_files = (jobs.get(job_id) or {}).get('ready_files') or {}
     kept = []
     for i, clip in enumerate(clips):
+        if clip.get('delivery_validated') is False:
+            continue
         clip_filename = (ready_files.get(i)
                          or _canonical_clip_file(output_dir, base_name, i))
         clip_path = os.path.join(output_dir, clip_filename)
@@ -3317,6 +3320,14 @@ async def _deliver_job(job_id, job):
         _delivering_jobs.discard(job_id)
 
 
+def _delivered_contract(data, delivered_count):
+    contract = data.get('output_contract')
+    if not contract:
+        return None
+    return output_contract.outcome(contract['requested_min'], contract['requested_max'],
+                                   contract['selected_count'], delivered_count)
+
+
 def _result_from_disk(job_id, output_dir):
     """The result of a job whose main.py exited 0, rebuilt from its dir (the
     clips main.py announced, or the canonical files). None: nothing rendered."""
@@ -3330,7 +3341,8 @@ def _result_from_disk(job_id, output_dir):
         job_id, output_dir, base_name, data.get('shorts', []))
     if not rendered:
         return None
-    return {'clips': rendered, 'cost_analysis': data.get('cost_analysis')}
+    return {'clips': rendered, 'cost_analysis': data.get('cost_analysis'),
+            'output_contract': _delivered_contract(data, len(rendered))}
 
 
 def _resume_delivery_record(job_id, job, m):
@@ -4624,7 +4636,8 @@ def _refresh_partial_result(job_id, output_dir):
                 clip['video_url'] = f"/videos/{job_id}/{clip_filename}"
                 ready_clips.append(clip)
         if ready_clips:
-            jobs[job_id]['result'] = {'clips': ready_clips, 'cost_analysis': cost_analysis}
+            jobs[job_id]['result'] = {'clips': ready_clips, 'cost_analysis': cost_analysis,
+                                      'output_contract': data.get('output_contract')}
     except Exception:
         # Ignore read errors during processing
         pass
@@ -4671,7 +4684,8 @@ def _finish_job(job_id, returncode, output_dir):
                 if missing:
                     jobs[job_id]['logs'].append(
                         f"⚠️ {missing} of {len(clips)} clips failed to render.")
-                jobs[job_id]['result'] = {'clips': rendered, 'cost_analysis': cost_analysis}
+                jobs[job_id]['result'] = {'clips': rendered, 'cost_analysis': cost_analysis,
+                                         'output_contract': _delivered_contract(data, len(rendered))}
         else:
             jobs[job_id]['status'] = 'failed'
             jobs[job_id]['logs'].append("No metadata file generated.")
@@ -4930,7 +4944,7 @@ async def _run_job_remote(job_id, job_data):
 @app.get("/health")
 async def health():
     """Lightweight liveness probe for uptime monitoring."""
-    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True}}
+    return {"status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True, "output_contract": True}}
 
 
 @app.get("/health/ready")
@@ -5525,7 +5539,7 @@ async def process_endpoint(
         source_end = body.get("source_end")
 
     # Normalize output format (auto = keep pipeline default).
-    if output_format not in ("vertical", "horizontal", "square"):
+    if output_format not in ("vertical", "horizontal", "square", "original"):
         output_format = "auto"
 
     # Accepts a JSON list or a comma-separated form field.
@@ -7016,7 +7030,7 @@ async def get_clip_scenes(job_id: str, clip_index: int, request: Request):
     if clip_index < 0 or clip_index >= len(clips):
         raise HTTPException(status_code=404, detail="Clip not found")
 
-    if data.get('output_format') == 'horizontal':
+    if data.get('output_format') in ('horizontal', 'original'):
         raise HTTPException(
             status_code=400,
             detail="Horizontal clips keep the full frame; there is no crop to reframe.")
@@ -7206,7 +7220,7 @@ async def _reframe_locked(req: ReframeRequest, request: Request, job, overrides)
         raise HTTPException(status_code=404, detail="Clip not found")
     clip = clips[req.clip_index]
 
-    if data.get('output_format') == 'horizontal':
+    if data.get('output_format') in ('horizontal', 'original'):
         raise HTTPException(
             status_code=400,
             detail="Horizontal clips keep the full frame; there is no crop to reframe.")

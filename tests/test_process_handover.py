@@ -137,7 +137,7 @@ def test_handover_still_requires_attestation(dirs, session):
     assert resp.status_code == 400
 
 
-def test_url_wins_over_session_id(dirs, session, monkeypatch):
+def test_url_wins_over_session_id(public_youtube_dns, dirs, session, monkeypatch):
     """A request carrying both keeps the historical URL behavior untouched."""
     monkeypatch.setattr(app_module, "QUALITY_GATE_MIN_HEIGHT", 0)
     resp = _post_process({
@@ -149,3 +149,10 @@ def test_url_wins_over_session_id(dirs, session, monkeypatch):
     assert "-u" in job["cmd"]
     assert "--transcript" not in job["cmd"]
     assert job["attestation"]["source"] == "url"
+
+
+def test_original_format_reaches_worker(dirs, session):
+    """An explicit native aspect request must never normalize to auto crop."""
+    _, job = _submitted_job(_post_process({
+        'thumbnail_session_id':'sess1', 'acknowledged':True, 'output_format':'original'}))
+    assert job['cmd'][job['cmd'].index('--format') + 1] == 'original'

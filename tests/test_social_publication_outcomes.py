@@ -174,9 +174,11 @@ def test_health_advertises_publication_outcomes(status_route):
     _, get = status_route
     response = get("/health")
     assert response.status_code == 200
-    # This branch inherits source-range support; stacking must preserve both capabilities.
+    # The delivery contract adds a capability; existing flags must remain
+    # present, and consumers use output_contract to reject older runtimes.
     assert response.json() == {
-        "status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True}}
+        "status": "ok", "capabilities": {"source_ranges": True, "publication_outcomes": True,
+                                             "output_contract": True}}
 
 
 @pytest.mark.parametrize("request_id", ["mine", "different-request"])

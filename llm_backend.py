@@ -1,17 +1,8 @@
-"""Text-only LLM backend for the moment picker: any OpenAI-compatible server.
+"""OpenAI-compatible text and explicitly configured sampled-image JSON backend.
 
-Ollama, LM Studio, vLLM, llama.cpp's server, LocalAI and OpenRouter all speak
-``POST {base}/chat/completions``. When ``LLM_BASE_URL`` is set (or
-``LLM_PROVIDER=openai``), the transcript scoring and detail passes in
-``main.get_viral_clips`` go here instead of Gemini, so a self-hosted install
-can run the whole pipeline without a Google key.
-
-What stays on Gemini, because it needs a model that can look at frames or a
-video file: the layout picker (``layout_picker.py``), the on-screen content
-detector (``screencast_layout.py``) and the silent-video path
-(``main.get_visual_clips``). Without a Gemini key those degrade the way they
-already did: the first two return "none", the third fails the job with a clear
-message. Nothing in this module is imported by them.
+The transcript passes use LLM_MODEL. The silent-video sampler opts into
+LLM_VISION_MODEL and supplies bounded local JPEG data URLs; no remote images
+are fetched here. Layout detection keeps its existing provider behavior.
 
 Structured output: the prompts already spell out the exact JSON shape, so a
 plain ``json_object`` mode is enough for most models. The request first asks
@@ -23,6 +14,8 @@ so ``main.py`` sees one shape regardless of provider.
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 from typing import Optional, Tuple, Type
@@ -50,6 +43,35 @@ def base_url() -> str:
 
 def model_name() -> str:
     return (os.environ.get("LLM_MODEL") or "").strip() or DEFAULT_MODEL
+
+
+def vision_model_name() -> Optional[str]:
+    """Vision is explicit opt-in; never assume the text model can see frames."""
+    return (os.environ.get("LLM_VISION_MODEL") or "").strip() or None
+
+
+def _image_parts(images):
+    from PIL import Image
+
+    if not isinstance(images, list) or not 1 <= len(images) <= 12:
+        raise ValueError("Expected 1 to 12 JPEG images")
+    parts = []
+    for url in images:
+        prefix = "data:image/jpeg;base64,"
+        if not isinstance(url, str) or not url.startswith(prefix) or len(url) > 65559:
+            raise ValueError("Only bounded data JPEG images are allowed")
+        try:
+            raw = base64.b64decode(url[len(prefix):], validate=True)
+            if not 0 < len(raw) <= 49152:
+                raise ValueError("JPEG byte limit")
+            with Image.open(io.BytesIO(raw)) as image:
+                if image.format != "JPEG" or not all(0 < n <= 512 for n in image.size):
+                    raise ValueError("JPEG dimension limit")
+                image.verify()
+        except Exception as exc:
+            raise ValueError("Invalid bounded JPEG image") from exc
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
 
 
 def active() -> bool:
@@ -100,6 +122,7 @@ def _is_format_rejection(resp: httpx.Response) -> bool:
 
 
 def generate_json(prompt: str, schema: Type[BaseModel], model: Optional[str] = None,
+                  images: Optional[list[str]] = None,
                   ) -> Tuple[dict, Optional[dict]]:
     """One chat completion that must come back as JSON matching ``schema``.
 
@@ -112,9 +135,14 @@ def generate_json(prompt: str, schema: Type[BaseModel], model: Optional[str] = N
 
     url = f"{base_url()}/chat/completions"
     model = model or model_name()
+    content = prompt
+    if images is not None:
+        if not isinstance(prompt, str) or len(prompt.encode()) > 65536:
+            raise ValueError("Vision prompt too large")
+        content = [{"type": "text", "text": prompt}, *_image_parts(images)]
     messages = [
         {"role": "system", "content": "You answer with a single JSON object and nothing else."},
-        {"role": "user", "content": prompt},
+        {"role": "user", "content": content},
     ]
     last_rejection: Optional[str] = None
     with _client() as client:

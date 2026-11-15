@@ -76,4 +76,8 @@ class TestMainAnnouncesTheDeliveredFile:
         served_at = main_src.index("served = captioned or deliver_path")
         mark_at = main_src.index("served = mark_delivery(served)")
         marker_at = main_src.index('print(f"CLIP_READY {i} {os.path.basename(served)}")')
-        assert caption_at < served_at < mark_at < marker_at
+        # A measured output rejection must happen before either delivery
+        # evidence or readiness is emitted; file existence alone is insufficient.
+        validate_at = main_src.index("clip['delivery_probe'] = output_contract.validate_delivery(")
+        validated_at = main_src.index("clip['delivery_validated'] = True")
+        assert caption_at < served_at < mark_at < validate_at < validated_at < marker_at
